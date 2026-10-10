@@ -1,21 +1,27 @@
-# React + TypeScript + Vite + shadcn/ui
+# FRAME 媒体中心 Web
 
-This is a template for a new Vite project with React, TypeScript, and shadcn/ui.
+基于 React、TypeScript、Vite、Tailwind CSS 4 和 shadcn/ui 的媒体管理前端。
 
-## Adding components
-
-To add components to your app, run the following command:
+## 本地开发
 
 ```bash
-npx shadcn@latest add button
+pnpm install
+pnpm dev
 ```
 
-This will place the ui components in the `src/components` directory.
+开发环境使用 MSW 模拟登录相关接口。演示账号为 `admin`，密码为 `123456`。生产构建不会启用模拟接口，需由后端提供对应的认证 API。
 
-## Using components
+## 常用命令
 
-To use the components in your app, import them as follows:
-
-```tsx
-import { Button } from "@/components/ui/button"
+```bash
+pnpm lint
+pnpm build
+pnpm preview
 ```
+
+## 目录说明
+
+- `src/layouts/media-shell`：应用侧栏、顶栏、导航和用户面板。
+- `src/components`：登录页、设置页和 shadcn/ui 组件。
+- `src/lib/auth-api.ts`：登录、登出和当前用户 API 封装。
+- `src/mocks`：开发环境的 MSW 认证接口。

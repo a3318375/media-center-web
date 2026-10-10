@@ -5,10 +5,19 @@ import "./index.css"
 import App from "./App.tsx"
 import { ThemeProvider } from "@/components/theme-provider.tsx"
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <ThemeProvider>
-      <App />
-    </ThemeProvider>
-  </StrictMode>
-)
+async function startApp() {
+  if (import.meta.env.DEV) {
+    const { worker } = await import("@/mocks/browser")
+    await worker.start({ onUnhandledFrame: "bypass" })
+  }
+
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
+    </StrictMode>
+  )
+}
+
+void startApp()
