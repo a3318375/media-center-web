@@ -1,3 +1,4 @@
+import { useState } from "react"
 import {
   Alert,
   AlertDescription,
@@ -19,11 +20,13 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { InfoIcon } from "lucide-react"
+import { CheckIcon, InfoIcon } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 const settingsTabs = [
   { value: "download", label: "下载设置" },
   { value: "general", label: "基本设置" },
+  { value: "emby", label: "Emby 看板" },
   { value: "exclusions", label: "全局排除" },
   { value: "proxy", label: "代理" },
   { value: "security", label: "安全" },
@@ -134,6 +137,8 @@ function SettingsSwitch({
 }
 
 export function SettingsPage() {
+  const [embySaved, setEmbySaved] = useState(false)
+
   return (
     <div className="flex flex-1 flex-col gap-6 p-6 sm:p-8">
       <Tabs defaultValue="download" className="w-full">
@@ -208,6 +213,22 @@ export function SettingsPage() {
               description="定期检查已订阅内容的媒体信息。"
             />
           </FieldGroup>
+        </TabsContent>
+
+        <TabsContent value="emby" className="pt-5">
+          <FieldGroup className="gap-4">
+            <SettingsInput id="emby-server-name" label="站点名称" placeholder="主媒体库" description="用于区分看板统计来源。" />
+            <SettingsInput id="emby-server-url" label="Emby 地址" placeholder="http://emby.local:8096" />
+            <SettingsSwitch id="emby-auto-refresh" label="每小时自动刷新" description="启用后定期更新看板数据。" />
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <Button type="button" onClick={() => setEmbySaved(true)}>保存 Emby 设置</Button>
+              {embySaved && <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"><CheckIcon className="size-4" />模拟设置已保存</span>}
+            </div>
+          </FieldGroup>
+          <Alert className="mt-5">
+            <InfoIcon />
+            <AlertDescription>当前为界面预览，设置仅在页面中模拟，不会连接 Emby 服务。</AlertDescription>
+          </Alert>
         </TabsContent>
 
         <TabsContent value="exclusions" className="pt-5">

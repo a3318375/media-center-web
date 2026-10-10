@@ -27,7 +27,7 @@ export function MediaShell({
     <TooltipProvider delay={0}>
       <SidebarProvider
         defaultOpen
-        style={{ "--sidebar-width": "17rem", "--sidebar-width-icon": "52px" } as React.CSSProperties}
+        style={{ "--sidebar-width": "14rem", "--sidebar-width-icon": "52px" } as React.CSSProperties}
       >
         <MediaSidebar
           activePath={activePath}

@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react"
 import { LoginPage } from "@/components/login-page"
+import { EmbyDashboard } from "@/components/emby-dashboard"
+import { DiscoverExplorePage } from "@/components/discover-explore-page"
+import { RankingsPage } from "@/components/rankings-page"
+import { AnimeSubscriptionsPage } from "@/components/anime-subscriptions-page"
+import { LogsPage } from "@/components/logs-page"
+import { MediaDetailPage } from "@/components/media-detail-page"
+import { MediaDetailContext, type MediaDetailRecord } from "@/components/media-detail-context"
 import { SettingsPage } from "@/components/settings-page"
 import { MediaShell } from "@/layouts/media-shell/media-shell"
 import { getCurrentUser, logout as logoutFromApi } from "@/lib/auth-api"
@@ -19,8 +26,9 @@ const menuTitles: Record<string, string> = {
 export function App() {
   const loginRoute = window.location.pathname.replace(/\/$/, "") === "/login"
   const [user, setUser] = useState<AuthUser | null>(null)
+  const [selectedMedia, setSelectedMedia] = useState<MediaDetailRecord | null>(null)
   const [activePath, setActivePath] = useState(
-    menuTitles[window.location.pathname] ? window.location.pathname : "/discover/explore"
+    menuTitles[window.location.pathname] ? window.location.pathname : "/emby"
   )
   const [isCheckingSession, setIsCheckingSession] = useState(!loginRoute)
 
@@ -29,7 +37,7 @@ export function App() {
       setActivePath(
         menuTitles[window.location.pathname]
           ? window.location.pathname
-          : "/discover/explore"
+          : "/emby"
       )
     }
 
@@ -62,7 +70,7 @@ export function App() {
   function handleLogin(currentUser: AuthUser) {
     setUser(currentUser)
     if (loginRoute) {
-      const defaultPath = "/discover/explore"
+      const defaultPath = "/emby"
       window.history.replaceState(null, "", defaultPath)
       setActivePath(defaultPath)
     }
@@ -96,14 +104,25 @@ export function App() {
   }
 
   return (
-    <MediaShell
-      user={user}
-      activePath={activePath}
-      title={menuTitles[activePath] ?? "Emby 看板"}
-      onNavigate={handleNavigate}
-      onLogout={() => void handleLogout()}
-    >
-      {activePath === "/settings" ? (
+    <MediaDetailContext.Provider value={setSelectedMedia}>
+      <MediaShell
+        user={user}
+        activePath={activePath}
+        title={selectedMedia ? "作品详情" : menuTitles[activePath] ?? "Emby 看板"}
+        onNavigate={(path) => { setSelectedMedia(null); handleNavigate(path) }}
+        onLogout={() => void handleLogout()}
+      >
+      {selectedMedia ? <MediaDetailPage media={selectedMedia} onBack={() => setSelectedMedia(null)} /> : activePath === "/emby" ? (
+        <EmbyDashboard />
+      ) : activePath === "/discover/explore" ? (
+        <DiscoverExplorePage />
+      ) : activePath === "/discover/rankings" ? (
+        <RankingsPage />
+      ) : activePath === "/discover/anime" ? (
+        <AnimeSubscriptionsPage />
+      ) : activePath === "/tools/logs" ? (
+        <LogsPage />
+      ) : activePath === "/settings" ? (
         <SettingsPage />
       ) : (
         <div className="flex flex-1 flex-col p-6 sm:p-8">
@@ -117,7 +136,8 @@ export function App() {
           </section>
         </div>
       )}
-    </MediaShell>
+      </MediaShell>
+    </MediaDetailContext.Provider>
   )
 }
 
