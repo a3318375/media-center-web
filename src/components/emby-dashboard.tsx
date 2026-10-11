@@ -1,18 +1,14 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   ActivityIcon,
   CheckIcon,
-  ChevronRightIcon,
   ClapperboardIcon,
-  Clock3Icon,
   FilmIcon,
   Layers3Icon,
   Music2Icon,
-  PlayIcon,
-  RadioIcon,
   RefreshCwIcon,
   TvMinimalPlayIcon,
-  UsersIcon,
+  StarIcon,
 } from "lucide-react"
 import { cn } from "cn"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -25,35 +21,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { useMediaDetail } from "@/components/media-detail-context"
+import { mediaApi } from "@/lib/media-api"
 import {
-  continueWatching,
-  embyLibraries,
-  embySites,
-  embyStats,
-  recentlyAdded,
   type EmbyMediaItem,
   type EmbyResumeItem,
 } from "@/mocks/data/emby-dashboard"
 
-type SiteSelection = (typeof embySites)[number]["id"]
 
 const statDefinitions = [
-  { key: "movies", label: "电影", icon: FilmIcon, note: "已入库影片" },
-  { key: "series", label: "剧集", icon: TvMinimalPlayIcon, note: "已入库剧集" },
-  { key: "episodes", label: "总集数", icon: ClapperboardIcon, note: "剧集与动画" },
-  { key: "plays", label: "播放次数", icon: PlayIcon, note: "累计播放" },
-  { key: "viewers", label: "活跃观众", icon: UsersIcon, note: "当前在线" },
-  { key: "hours", label: "时长（小时）", icon: Clock3Icon, note: "累计观看" },
+  { key: "movies", label: "电影" },
+  { key: "series", label: "剧集" },
+  { key: "episodes", label: "总集数" },
+  { key: "plays", label: "播放次数" },
+  { key: "viewers", label: "活跃观众" },
+  { key: "hours", label: "时长(小时)" },
 ] as const
 
 const libraryIcons = {
@@ -68,35 +50,65 @@ function formatTime(date: Date) {
   return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(date)
 }
 
+function useEmbyImageUrl(id?: string) {
+  const [imageUrl, setImageUrl] = useState<string>()
+
+  useEffect(() => {
+    let active = true
+    let objectUrl: string | undefined
+    if (!id) return
+    mediaApi.embyImage(id).then((blob) => {
+      if (!active) return
+      objectUrl = URL.createObjectURL(blob)
+      setImageUrl(objectUrl)
+    }).catch(() => {})
+    return () => {
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [id])
+
+  return imageUrl
+}
+
 function PosterArtwork({ item }: { item: EmbyMediaItem }) {
+  const imageUrl = useEmbyImageUrl(item.id)
+  if (imageUrl) return <img src={imageUrl} alt={`${item.title}海报`} className="aspect-[2/3] w-full object-cover" loading="lazy" />
+
   return (
     <div
       role="img"
-      aria-label={`${item.title}的演示海报`}
+      aria-label={`${item.title}海报`}
       className={cn(
-        "relative isolate flex aspect-[3/4] overflow-hidden bg-gradient-to-br p-3 text-primary-foreground",
-        item.palette
+        "relative isolate flex aspect-[2/3] overflow-hidden bg-muted p-3 text-muted-foreground"
       )}
     >
-      <div className="absolute -right-8 -top-8 -z-10 size-36 rounded-full border-[18px] border-background/15" />
-      <div className="absolute -bottom-10 -left-6 -z-10 size-32 rounded-full bg-background/15 blur-xl" />
-      <div className="absolute inset-x-3 top-1/2 -z-10 h-px -rotate-12 bg-background/30" />
-      <div className="flex w-full flex-col justify-between">
-        <div className="flex items-start justify-between gap-2">
-          <span className="rounded-full border border-background/30 bg-background/20 px-2 py-1 text-[10px] font-medium backdrop-blur">
-            FRAME · MEDIA
-          </span>
-          <span className="text-xs font-semibold tabular-nums">{item.year}</span>
-        </div>
-        <div>
-          <p className="whitespace-pre-line text-3xl font-black leading-[1.05] tracking-tight sm:text-4xl">
-            {item.artworkTitle}
-          </p>
-          <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.22em] opacity-80">
-            {item.kind} · {item.rating} 分
-          </p>
-        </div>
+      <div className="absolute inset-0 -z-10 bg-gradient-to-br from-background/40 via-transparent to-foreground/5" />
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-center">
+        <FilmIcon className="size-7 opacity-50" aria-hidden="true" />
+        <p className="line-clamp-3 px-1 text-sm font-medium leading-snug">{item.title}</p>
       </div>
+    </div>
+  )
+}
+
+function LibraryPoster({ item }: { item: EmbyMediaItem }) {
+  const imageUrl = useEmbyImageUrl(item.id)
+  return imageUrl ? <img src={imageUrl} alt="" className="size-full object-cover" loading="lazy" /> : <div className="flex size-full items-center justify-center bg-muted"><FilmIcon className="size-5 opacity-40" aria-hidden="true" /></div>
+}
+
+function LibraryArtwork({ libraryId, items, type }: { libraryId: string; items: EmbyMediaItem[]; type: string }) {
+  const libraryImageUrl = useEmbyImageUrl(libraryId)
+  const Icon = libraryIcons[type as keyof typeof libraryIcons] ?? Layers3Icon
+  return (
+    <div className="relative aspect-[16/9] w-full overflow-hidden bg-muted text-muted-foreground">
+      {libraryImageUrl ? <img src={libraryImageUrl} alt="" className="size-full object-cover" loading="lazy" /> : items.length > 0 ? (
+        <div className="grid size-full overflow-hidden" style={{ gridTemplateColumns: `repeat(${Math.min(items.length, 4)}, minmax(0, 1fr))` }}>
+          {items.slice(0, 4).map((item) => <div key={item.id} className="min-w-0 overflow-hidden"><LibraryPoster item={item} /></div>)}
+        </div>
+      ) : (
+        <div className="flex size-full items-center justify-center"><Icon className="size-7" aria-hidden="true" /></div>
+      )}
     </div>
   )
 }
@@ -111,84 +123,73 @@ function MediaCard({
   resume?: EmbyResumeItem
 }) {
   return (
-    <button
+    <Button
       type="button"
-      className="group w-full rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      variant="ghost"
+      className="group flex h-auto w-full min-w-0 flex-col items-stretch justify-start overflow-hidden rounded-xl border border-border bg-card p-0 text-left font-normal whitespace-normal text-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring"
       onClick={() => onOpen(item)}
       aria-label={`${resume ? "继续播放" : "查看详情"}《${item.title}》`}
     >
-      <Card className="overflow-hidden p-0 transition-[box-shadow,transform] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md">
-        <CardContent className="p-0">
+      <div className="overflow-hidden">
+        <div className="relative">
           <PosterArtwork item={item} />
-          <div className="flex min-w-0 items-center justify-between gap-2 p-3">
+          <Badge variant="secondary" className="absolute left-2 top-2 bg-black/55 text-white">{item.kind}</Badge>
+          {item.rating !== "—" && <Badge variant="secondary" className="absolute right-2 top-2 gap-1 bg-black/55 text-amber-200"><StarIcon className="size-3 fill-current" />{item.rating}</Badge>}
+        </div>
+          <div className="flex min-w-0 items-center justify-between gap-2 p-2.5">
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{item.title}</p>
-              <p className="mt-1 truncate text-xs text-muted-foreground">
-                {resume ? `${resume.resumeLabel} · ${resume.remaining}` : `${item.year} · ${item.kind}`}
+              <p className="truncate text-xs font-semibold">{item.title}</p>
+              <p className="mt-1 truncate text-[11px] text-muted-foreground">
+                {resume ? (resume.remaining ? `${resume.resumeLabel} · ${resume.remaining}` : resume.resumeLabel) : `${item.year} · ${item.kind}`}
               </p>
             </div>
-            {!resume && <Badge variant="secondary" className="shrink-0 tabular-nums">{item.rating}</Badge>}
           </div>
-          {resume && (
-            <div className="flex flex-col gap-2 px-3 pb-3">
-              <Progress value={resume.progress} aria-label={`${item.title}播放进度`} />
-              <span className="text-right text-xs tabular-nums text-muted-foreground">{resume.progress}%</span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </button>
+      </div>
+    </Button>
   )
 }
 
 export function EmbyDashboard() {
-  const [siteId, setSiteId] = useState<SiteSelection>("all")
   const [selectedLibrary, setSelectedLibrary] = useState<string | null>(null)
-  const [liveEnabled, setLiveEnabled] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [lastRefreshed, setLastRefreshed] = useState(() => new Date())
   const [notice, setNotice] = useState("")
+  const [dashboard, setDashboard] = useState<Awaited<ReturnType<typeof mediaApi.embyDashboard>> | null>(null)
   const openMediaDetail = useMediaDetail()
 
-  const visibleLibraries = useMemo(
-    () => embyLibraries.filter((library) => siteId === "all" || library.siteId === siteId),
-    [siteId]
-  )
+  useEffect(() => {
+    mediaApi.embyDashboard().then(setDashboard).catch((error: unknown) => setNotice(error instanceof Error ? error.message : "Emby 概览加载失败"))
+  }, [])
+
+  const embyLibraries = useMemo(() => dashboard?.libraries ?? [], [dashboard])
+  const recentlyAdded = useMemo(() => dashboard?.recentlyAdded ?? [], [dashboard])
+  const continueWatching = useMemo(() => dashboard?.continueWatching ?? [], [dashboard])
+
+  const visibleLibraries = embyLibraries
   const visibleRecent = useMemo(
     () => recentlyAdded.filter((item) =>
-      (siteId === "all" || item.siteId === siteId) &&
       (!selectedLibrary || item.libraryId === selectedLibrary)
     ),
-    [siteId, selectedLibrary]
+    [recentlyAdded, selectedLibrary]
   )
   const visibleResume = useMemo(
     () => continueWatching.filter((item) =>
-      (siteId === "all" || item.siteId === siteId) &&
       (!selectedLibrary || item.libraryId === selectedLibrary)
     ),
-    [siteId, selectedLibrary]
+    [continueWatching, selectedLibrary]
   )
-  const stats = embyStats[siteId]
+  const stats = dashboard?.stats.all ?? { movies: 0, series: 0, episodes: 0, plays: 0, viewers: 0, hours: 0 }
   const selectedLibraryTitle = embyLibraries.find((library) => library.id === selectedLibrary)?.title
-  const currentDate = new Intl.DateTimeFormat("zh-CN", { dateStyle: "full" }).format(new Date())
-
-  function handleSiteChange(value: unknown) {
-    if (typeof value === "string" && embySites.some((site) => site.id === value)) {
-      setSiteId(value as SiteSelection)
-      setSelectedLibrary(null)
-    }
-  }
-
+  const cacheDescription = dashboard
+    ? `缓存于 ${formatTime(new Date(dashboard.updatedAt))} · 失效后进入页面时自动更新。`
+    : "缓存失效后进入页面时自动更新。"
   function refreshCache() {
     if (isRefreshing) return
     setIsRefreshing(true)
     setNotice("")
-    window.setTimeout(() => {
-      const refreshedAt = new Date()
-      setLastRefreshed(refreshedAt)
-      setIsRefreshing(false)
-      setNotice(`演示缓存已刷新 · ${formatTime(refreshedAt)}`)
-    }, 650)
+    mediaApi.embyDashboard(true).then((data) => {
+      setDashboard(data)
+      setNotice("Emby 缓存已刷新。")
+    }).catch(() => setNotice("Emby 概览刷新失败")).finally(() => setIsRefreshing(false))
   }
 
   function openMedia(item: EmbyMediaItem) {
@@ -198,76 +199,37 @@ export function EmbyDashboard() {
       kind: item.kind,
       year: item.year,
       rating: item.rating,
-      source: "Emby 媒体库",
+      mediaId: item.id,
+      source: "emby",
+      sourceId: item.id,
+      sourceLabel: "Emby 媒体库",
+      mediaType: item.kind === "电影" ? "movie" : item.kind === "纪录片" ? "documentary" : "tv",
       summary: item.summary,
       palette: item.palette,
       artwork: item.artworkTitle,
-      actionLabel: "模拟播放",
-      onAction: () => setNotice(`正在模拟播放《${item.title}》`),
     })
     setNotice("")
   }
 
   return (
     <div className="flex flex-col gap-6 p-5 sm:p-7 lg:p-8">
-      <div className="flex flex-col gap-3 border-b border-border/70 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-          <Badge variant="outline" className="gap-1.5 font-normal">
-            <span className="size-1.5 rounded-full bg-chart-2" />演示数据
-          </Badge>
-          <p className="text-sm text-muted-foreground">{currentDate} · 最近刷新 {formatTime(lastRefreshed)}</p>
-        </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" onClick={refreshCache} disabled={isRefreshing}>
-              <RefreshCwIcon data-icon="inline-start" className={isRefreshing ? "animate-spin" : undefined} />
-              {isRefreshing ? "刷新中" : "刷新缓存"}
-            </Button>
-            <Select value={siteId} onValueChange={handleSiteChange}>
-              <SelectTrigger aria-label="统计站点范围" className="w-40 bg-background">
-              <SelectValue>{embySites.find((site) => site.id === siteId)?.label}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {embySites.map((site) => <SelectItem key={site.id} value={site.id}>{site.label}</SelectItem>)}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <Button
-              type="button"
-              variant={liveEnabled ? "outline" : "ghost"}
-              size="icon"
-              aria-label={liveEnabled ? "关闭实时状态模拟" : "开启实时状态模拟"}
-              aria-pressed={liveEnabled}
-              title={liveEnabled ? "实时状态模拟已开启" : "实时状态模拟已暂停"}
-              onClick={() => setLiveEnabled((enabled) => !enabled)}
-            >
-              <RadioIcon />
-            </Button>
-          </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="min-w-0 text-sm text-muted-foreground">{cacheDescription}</p>
+        <Button variant="secondary" onClick={refreshCache} disabled={isRefreshing} className="shrink-0">
+          <RefreshCwIcon data-icon="inline-start" className={isRefreshing ? "animate-spin" : undefined} />
+          {isRefreshing ? "刷新中" : "刷新缓存"}
+        </Button>
       </div>
-
       {notice && <Alert className="border-chart-2/30 bg-chart-2/5"><CheckIcon /><AlertDescription>{notice}</AlertDescription></Alert>}
 
-      <section aria-labelledby="emby-stats-title" className="flex flex-col gap-3">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Overview</p>
-            <h3 id="emby-stats-title" className="mt-1 text-lg font-semibold tracking-tight">媒体统计</h3>
-          </div>
-          <Badge variant="secondary" className="font-normal">{embySites.find((site) => site.id === siteId)?.label}</Badge>
-        </div>
+      <section aria-label="媒体统计">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           {statDefinitions.map((stat) => {
-            const Icon = stat.icon
             return (
-              <Card key={stat.key} className="border-border/70 shadow-none">
-                <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 pb-2">
-                  <CardDescription>{stat.label}</CardDescription>
-                  <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground"><Icon className="size-4" aria-hidden="true" /></span>
-                </CardHeader>
-                <CardContent>
+              <Card key={stat.key} className="border-border/70 p-0 shadow-none">
+                <CardContent className="flex h-20 flex-col justify-center gap-0.5 px-4 py-2">
+                  <CardDescription className="text-xs">{stat.label}</CardDescription>
                   <CardTitle className="text-2xl font-semibold tabular-nums tracking-tight">{stats[stat.key].toLocaleString("zh-CN")}</CardTitle>
-                  <p className="mt-1 text-xs text-muted-foreground">{stat.note}</p>
                 </CardContent>
               </Card>
             )
@@ -285,27 +247,27 @@ export function EmbyDashboard() {
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           {visibleLibraries.map((library) => {
-            const Icon = libraryIcons[library.type as keyof typeof libraryIcons]
             const isSelected = selectedLibrary === library.id
+            const covers = recentlyAdded.filter((item) => item.libraryId === library.id).slice(0, 4)
             return (
-              <button
+              <Button
                 key={library.id}
                 type="button"
+                variant="ghost"
                 aria-pressed={isSelected}
                 onClick={() => setSelectedLibrary((current) => current === library.id ? null : library.id)}
-                className="rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="flex h-auto w-full min-w-0 flex-col items-stretch justify-start rounded-xl p-0 text-left font-normal whitespace-normal text-foreground focus-visible:ring-offset-2"
               >
-                <Card className={cn("h-full border-border/70 shadow-none transition-colors hover:bg-muted/50", isSelected && "border-primary/50 bg-primary/5 ring-2 ring-primary/20")}>
-                  <CardContent className="flex items-center gap-3 p-3">
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground"><Icon className="size-5" aria-hidden="true" /></span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold">{library.title}</span>
-                      <span className="mt-1 block text-xs text-muted-foreground">{library.count.toLocaleString("zh-CN")} 个项目</span>
+                <Card className={cn("h-full overflow-hidden border-border/70 p-0 shadow-none transition-colors hover:bg-muted/50", isSelected && "border-primary/50 bg-primary/5 ring-2 ring-primary/20")}>
+                  <CardContent className="p-0">
+                    <LibraryArtwork libraryId={library.id} items={covers} type={library.type} />
+                    <span className="flex min-w-0 items-center justify-between gap-2 p-2.5">
+                      <span className="truncate text-sm font-semibold">{library.title}</span>
+                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{library.count.toLocaleString("zh-CN")}</span>
                     </span>
-                    <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
                   </CardContent>
                 </Card>
-              </button>
+              </Button>
             )
           })}
         </CardContent>
@@ -326,12 +288,6 @@ export function EmbyDashboard() {
           onOpen={openMedia}
           emptyMessage="当前筛选条件下暂无继续播放内容。"
           resume
-          headerAction={
-            <Badge variant={liveEnabled ? "secondary" : "outline"} className="gap-1.5 font-normal">
-              <span className={cn("size-1.5 rounded-full", liveEnabled ? "bg-chart-2" : "bg-muted-foreground")} />
-              {liveEnabled ? "实时状态" : "已暂停"}
-            </Badge>
-          }
         />
       </div>
 
@@ -346,7 +302,6 @@ function MediaSection({
   onOpen,
   emptyMessage,
   resume = false,
-  headerAction,
 }: {
   title: string
   description: string
@@ -354,18 +309,17 @@ function MediaSection({
   onOpen: (item: EmbyMediaItem) => void
   emptyMessage: string
   resume?: boolean
-  headerAction?: React.ReactNode
 }) {
   return (
     <Card className="border-border/70 shadow-none">
       <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
         <div className="space-y-1"><CardTitle>{title}</CardTitle><CardDescription>{description}</CardDescription></div>
-        {headerAction ?? (items.length > 0 && <Badge variant="outline" className="font-normal tabular-nums">{items.length} 项</Badge>)}
+        {items.length > 0 && <Badge variant="outline" className="font-normal tabular-nums">{items.length} 项</Badge>}
       </CardHeader>
       <CardContent>
         {items.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {items.map((item) => (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
+            {items.slice(0, 10).map((item) => (
               <MediaCard key={item.id} item={item} onOpen={onOpen} resume={resume ? item as EmbyResumeItem : undefined} />
             ))}
           </div>
@@ -379,3 +333,13 @@ function MediaSection({
     </Card>
   )
 }
+
+
+
+
+
+
+
+
+
+

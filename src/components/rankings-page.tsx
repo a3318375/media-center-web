@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react"
-import { FlameIcon, RotateCwIcon, StarIcon, TrophyIcon } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { CheckIcon, FlameIcon, RotateCwIcon, StarIcon, TrophyIcon } from "lucide-react"
 import { cn } from "cn"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -23,6 +23,7 @@ import {
   type RankingCategory,
   type RankingEntry,
 } from "@/mocks/data/rankings"
+import { mediaApi } from "@/lib/media-api"
 
 const rankingFilters: { id: RankingCategory | "all"; label: string }[] = [
   { id: "all", label: "全部榜单" },
@@ -110,18 +111,24 @@ export function RankingsPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [notice, setNotice] = useState("")
   const [savedIds, setSavedIds] = useState<string[]>([])
+  const [categories, setCategories] = useState(rankingCategories)
+  const [lists, setLists] = useState(rankingLists)
   const openMediaDetail = useMediaDetail()
 
+  useEffect(() => {
+    mediaApi.rankings().then((data) => { setCategories(data.categories); setLists(data.lists) }).catch(() => setNotice("榜单加载失败"))
+  }, [])
+
   const visibleSections = useMemo(() => {
-    return rankingCategories
+    return categories
       .filter((item) => category === "all" || item.id === category)
       .map((item) => {
-        let entries = rankingLists[item.id]
+        let entries = lists[item.id]
         if (platform !== "热门") entries = entries.filter((entry) => entry.platforms.includes(platform))
         if (region !== "全球") entries = entries.filter((entry) => entry.region === region)
         return { ...item, entries }
       })
-  }, [category, platform, region])
+  }, [category, platform, region, categories, lists])
 
   const totalEntries = visibleSections.reduce((sum, section) => sum + section.entries.length, 0)
 
@@ -129,10 +136,7 @@ export function RankingsPage() {
     if (refreshing) return
     setRefreshing(true)
     setNotice("")
-    window.setTimeout(() => {
-      setRefreshing(false)
-      setNotice("模拟榜单已刷新")
-    }, 550)
+    mediaApi.rankings().then((data) => { setCategories(data.categories); setLists(data.lists); setNotice("榜单已从 API 刷新") }).catch(() => setNotice("榜单刷新失败")).finally(() => setRefreshing(false))
   }
 
   function toggleSaved(entry: RankingEntry) {
@@ -197,7 +201,7 @@ export function RankingsPage() {
       <Card className="border-border/70 shadow-none">
         <CardHeader className="flex-row items-end justify-between gap-3">
           <div>
-            <CardDescription>{platform} · {category === "all" ? "全部榜单" : rankingCategories.find((item) => item.id === category)?.source} · {region}</CardDescription>
+            <CardDescription>{platform} · {category === "all" ? "全部榜单" : categories.find((item) => item.id === category)?.source} · {region}</CardDescription>
             <CardTitle className="mt-1 text-xl">榜单推荐</CardTitle>
           </div>
           <p className="hidden text-xs text-muted-foreground md:block">展示本地演示榜单，不会请求外部平台。</p>
@@ -210,7 +214,7 @@ export function RankingsPage() {
               source={section.source}
               description={section.description}
               entries={section.entries}
-              onOpen={(entry) => openMediaDetail({ title: entry.title, originalTitle: entry.title, kind: entry.kind, year: entry.year, region: entry.region, rating: entry.rating, source: entry.source, genres: [entry.source], summary: entry.tagline, palette: entry.palette, artwork: entry.title, actionLabel: savedIds.includes(entry.id) ? "从片单移除" : "加入片单", onAction: () => toggleSaved(entry) })}
+              onOpen={(entry) => openMediaDetail({ mediaId: entry.id, source: "tmdb", sourceId: entry.id, mediaType: entry.kind === "电影" ? "movie" : "tv", title: entry.title, originalTitle: entry.title, kind: entry.kind, year: entry.year, region: entry.region, rating: entry.rating, ratings: [{ source: "tmdb", value: entry.rating }], sourceLabel: entry.source, genres: [entry.source], summary: entry.tagline, palette: entry.palette, artwork: entry.title, actionLabel: savedIds.includes(entry.id) ? "从片单移除" : "加入片单", onAction: () => toggleSaved(entry) })}
             />
           )) : (
             <div className="flex min-h-48 flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-muted/20 text-center">

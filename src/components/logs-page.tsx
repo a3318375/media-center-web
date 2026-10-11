@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { DownloadIcon, PauseIcon, PlayIcon, SearchIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -12,18 +12,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { mockLogs, type LogEntry, type LogLevel } from "@/mocks/data/logs"
+import { getLogs, type LogEntry, type LogLevel } from "@/lib/logs-api"
 
 const levels = ["全部级别", "INFO", "WARN", "ERROR", "DEBUG"] as const
-const sources = ["全部模块", ...new Set(mockLogs.map((log) => log.source))]
-
 function downloadLogs(logs: LogEntry[]) {
   const content = logs.map((log) => `${log.time}\t${log.source}\t${log.level}\t${log.message}`).join("\n")
   const blob = new Blob(["时间\t模块\t级别\t内容\n" + content], { type: "text/plain;charset=utf-8" })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement("a")
   anchor.href = url
-  anchor.download = "media-center-demo-logs.txt"
+  anchor.download = "media-center-logs.txt"
   anchor.click()
   URL.revokeObjectURL(url)
 }
@@ -39,22 +37,36 @@ export function LogsPage() {
   const [level, setLevel] = useState<(typeof levels)[number]>("全部级别")
   const [source, setSource] = useState("全部模块")
   const [query, setQuery] = useState("")
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [error, setError] = useState("")
 
-  const visibleLogs = useMemo(() => mockLogs.filter((log) => {
-    const levelMatches = level === "全部级别" || log.level === level
-    const sourceMatches = source === "全部模块" || log.source === source
-    const queryMatches = !query || `${log.source} ${log.message}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())
-    return levelMatches && sourceMatches && queryMatches
-  }).slice().reverse(), [level, source, query])
+  useEffect(() => {
+    let active = true
+    let interval: number | undefined
+    const load = () => {
+      void getLogs({ level: level === "全部级别" ? undefined : level, source: source === "全部模块" ? undefined : source, query, limit: 500 })
+        .then((items) => { if (active) { setLogs(items); setError("") } })
+        .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "读取日志失败") })
+    }
+    const initial = window.setTimeout(() => {
+      load()
+      if (autoRefresh) interval = window.setInterval(load, 5000)
+    }, 200)
+    return () => { active = false; window.clearTimeout(initial); if (interval) window.clearInterval(interval) }
+  }, [autoRefresh, level, query, source])
+
+  const sources = useMemo(() => ["全部模块", ...new Set(logs.map((log) => log.source))], [logs])
+
+  const visibleLogs = logs
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:gap-5 sm:p-6 lg:p-7">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm text-muted-foreground">查看后台任务与模块运行记录。</p>
-          <p className="mt-1 text-xs text-muted-foreground">当前为本地模拟日志，不连接后端服务。</p>
+          <p className="mt-1 text-xs text-muted-foreground">展示后端请求和服务运行记录；自动刷新间隔为 5 秒。</p>
         </div>
-        <Badge variant="outline">演示数据 · {visibleLogs.length} 条</Badge>
+        <Badge variant="outline">服务日志 · {visibleLogs.length} 条</Badge>
       </div>
 
       <Card className="border-border/70 shadow-none">
@@ -82,17 +94,18 @@ export function LogsPage() {
           </div>
           <div className="flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
             <span className={`size-2 rounded-full ${autoRefresh ? "bg-emerald-500" : "bg-muted-foreground/50"}`} />
-            自动刷新{autoRefresh ? "已开启" : "已暂停"} · 模拟日志流
+            自动刷新{autoRefresh ? "已开启" : "已暂停"} · SQLite 保留最近 5000 条记录
           </div>
         </CardContent>
       </Card>
 
       <Card className="min-h-0 flex-1 border-border/70">
         <CardContent className="p-2 sm:p-3">
-          <div className="max-h-[calc(100svh-290px)] min-h-80 overflow-auto rounded-lg border bg-background px-2 sm:px-3" role="log" aria-label="模拟日志列表" aria-live="off">
+          {error && <p role="alert" className="mb-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
+          <div className="max-h-[calc(100svh-290px)] min-h-80 overflow-auto rounded-lg border bg-background px-2 sm:px-3" role="log" aria-label="服务日志列表" aria-live="off">
             {visibleLogs.length ? visibleLogs.map((log) => (
               <div key={log.id} className="grid min-h-9 grid-cols-[72px_112px_58px_minmax(0,1fr)] items-center gap-2 border-b last:border-b-0 sm:grid-cols-[74px_132px_64px_minmax(0,1fr)] sm:gap-2.5">
-                <time className="font-mono text-[11px] text-muted-foreground">{log.time}</time>
+                <time className="font-mono text-[11px] text-muted-foreground">{Number.isNaN(Date.parse(log.time)) ? log.time : new Date(log.time).toLocaleTimeString("zh-CN", { hour12: false })}</time>
                 <Badge variant="secondary" className="max-w-full justify-center truncate px-2 text-[10px] font-medium">{log.source}</Badge>
                 <Badge variant={levelVariant(log.level)} className="justify-center px-1.5 text-[10px]">{log.level}</Badge>
                 <p className="min-w-0 truncate font-mono text-xs" title={log.message}>{log.message}</p>

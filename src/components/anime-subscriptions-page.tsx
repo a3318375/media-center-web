@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { CheckIcon, Clock3Icon, PauseIcon, PlayIcon, RotateCwIcon, SearchIcon, StarIcon } from "lucide-react"
 import { cn } from "cn"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -15,8 +15,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { animeSubscriptions, type AnimeSubscription, type AnimeSubscriptionStatus } from "@/mocks/data/anime-subscriptions"
+import { type AnimeSubscription, type AnimeSubscriptionStatus } from "@/mocks/data/anime-subscriptions"
 import { useMediaDetail } from "@/components/media-detail-context"
+import { mediaApi } from "@/lib/media-api"
 
 type StatusFilter = "全部" | AnimeSubscriptionStatus
 const weekdays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"] as const
@@ -79,7 +80,7 @@ function AnimeCard({
 }
 
 export function AnimeSubscriptionsPage() {
-  const [subscriptions, setSubscriptions] = useState(animeSubscriptions)
+  const [subscriptions, setSubscriptions] = useState<AnimeSubscription[]>([])
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("全部")
   const [weekdayFilter, setWeekdayFilter] = useState<WeekdayFilter>("全部")
   const [queryDraft, setQueryDraft] = useState("")
@@ -88,6 +89,10 @@ export function AnimeSubscriptionsPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [notice, setNotice] = useState("")
   const openMediaDetail = useMediaDetail()
+
+  useEffect(() => {
+    mediaApi.animeSubscriptions().then(setSubscriptions).catch(() => setNotice("订阅列表加载失败"))
+  }, [])
 
   const counts = useMemo(() => ({
     全部: subscriptions.length,
@@ -111,10 +116,13 @@ export function AnimeSubscriptionsPage() {
     })
   }, [subscriptions, statusFilter, weekdayFilter, query, sort])
 
-  function toggleStatus(anime: AnimeSubscription) {
+  async function toggleStatus(anime: AnimeSubscription) {
     const nextStatus = anime.status === "更新中" ? "已暂停" : "更新中"
-    setSubscriptions((current) => current.map((item) => item.id === anime.id ? { ...item, status: nextStatus } : item))
-    setNotice(anime.title + (nextStatus === "已暂停" ? " 已暂停订阅" : " 已恢复订阅"))
+    try {
+      const updated = await mediaApi.updateAnimeSubscription(anime.id, { status: nextStatus })
+      setSubscriptions((current) => current.map((item) => item.id === anime.id ? updated : item))
+      setNotice(anime.title + (nextStatus === "已暂停" ? " 已暂停订阅" : " 已恢复订阅"))
+    } catch { setNotice("更新订阅状态失败") }
   }
 
   function openAnime(anime: AnimeSubscription) {
@@ -124,7 +132,11 @@ export function AnimeSubscriptionsPage() {
       kind: "动画",
       year: 2026,
       rating: anime.rating,
-      source: "RSS 订阅",
+      mediaId: anime.id,
+      source: "anilist",
+      sourceId: anime.id,
+      sourceLabel: "RSS 订阅",
+      mediaType: "anime",
       genres: anime.genres,
       summary: anime.description,
       palette: anime.palette,
@@ -140,10 +152,7 @@ export function AnimeSubscriptionsPage() {
     if (refreshing) return
     setRefreshing(true)
     setNotice("")
-    window.setTimeout(() => {
-      setRefreshing(false)
-      setNotice("订阅状态已模拟刷新")
-    }, 500)
+    mediaApi.animeSubscriptions().then((items) => { setSubscriptions(items); setNotice("订阅列表已刷新") }).catch(() => setNotice("刷新失败")).finally(() => setRefreshing(false))
   }
 
   function submitSearch(event: React.FormEvent<HTMLFormElement>) {

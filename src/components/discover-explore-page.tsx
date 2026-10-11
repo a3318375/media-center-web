@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { BookmarkIcon, CheckIcon, FilmIcon, RotateCwIcon, SearchIcon, SparklesIcon, StarIcon, UsersIcon } from "lucide-react"
 import { cn } from "cn"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -10,7 +10,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useMediaDetail } from "@/components/media-detail-context"
-import { discoverItems, discoverPeople, discoverSources, type DiscoverItem, type DiscoverSource } from "@/mocks/data/discover"
+import { discoverPeople, discoverSources, type DiscoverItem, type DiscoverSource } from "@/mocks/data/discover"
+import { mediaApi } from "@/lib/media-api"
 
 type Filters = { mediaType: string; genre: string; region: string; year: string; sort: string }
 const years = Array.from({ length: 20 }, (_, i) => String(2026 - i))
@@ -77,10 +78,20 @@ export function DiscoverExplorePage() {
   const [saved, setSaved] = useState<string[]>([])
   const [notice, setNotice] = useState("")
   const [refreshing, setRefreshing] = useState(false)
+  const [sourceItems, setSourceItems] = useState<DiscoverItem[]>([])
+  const [peopleData, setPeopleData] = useState(discoverPeople)
+
+  useEffect(() => {
+    let active = true
+    mediaApi.discover({ source: source === "people" ? "tmdb" : source, query: query || undefined })
+      .then((result) => { if (active) { setSourceItems(result.items); setPeopleData(result.people) } })
+      .catch(() => { if (active) setNotice("加载探索数据失败") })
+    return () => { active = false }
+  }, [source, query])
 
   const items = useMemo(() => {
     if (source === "people") return []
-    let result = discoverItems.filter((item) => item.source === source)
+    let result = sourceItems
     if (filters.mediaType === "电影") result = result.filter((item) => item.kind === "电影")
     if (filters.mediaType === "电视剧") result = result.filter((item) => item.kind === "剧集")
     if (filters.mediaType === "动画") result = result.filter((item) => item.kind === "动画")
@@ -92,9 +103,9 @@ export function DiscoverExplorePage() {
       result = result.filter((item) => (item.title + " " + item.originalTitle + " " + item.summary + " " + item.genres.join(" ")).toLocaleLowerCase().includes(term))
     }
     return [...result].sort((a, b) => filters.sort === "最新" ? b.year - a.year : b.rating - a.rating)
-  }, [filters, query, source])
+  }, [filters, query, source, sourceItems])
 
-  const people = useMemo(() => discoverPeople.filter((person) => !query || (person.name + " " + person.originalName + " " + person.knownFor).toLocaleLowerCase().includes(query.toLocaleLowerCase())), [query])
+  const people = useMemo(() => peopleData.filter((person) => !query || (person.name + " " + person.originalName + " " + person.knownFor).toLocaleLowerCase().includes(query.toLocaleLowerCase())), [peopleData, query])
   const sourceInfo = discoverSources.find((entry) => entry.id === source)!
   const options = source === "people" ? null : sourceOptions[source]
 
@@ -126,7 +137,14 @@ export function DiscoverExplorePage() {
   function refresh() {
     if (refreshing) return
     setRefreshing(true)
-    window.setTimeout(() => { setRefreshing(false); setNotice("演示内容已刷新") }, 500)
+    mediaApi.discover({ source: source === "people" ? "tmdb" : source, query: query || undefined }).then((result) => { setSourceItems(result.items); setPeopleData(result.people); setNotice("模拟数据已从 API 刷新") }).catch(() => setNotice("刷新失败")).finally(() => setRefreshing(false))
+  }
+
+  async function openDiscoverItem(item: DiscoverItem, actionLabel?: string, onAction?: () => void) {
+    try {
+      const detail = await mediaApi.detail(item.source, item.id.replace(/^[a-z]+-/, "demo-"))
+      openMediaDetail({ mediaId: detail.mediaId, sourceId: detail.sourceId, source: detail.source, sourceLabel: discoverSources.find((entry) => entry.id === item.source)?.label, mediaType: detail.mediaType, ratings: detail.ratings, credits: detail.credits, seasons: detail.seasons, title: detail.title, originalTitle: detail.originalTitle, kind: item.kind, year: detail.year, region: detail.region, rating: detail.ratings[0]?.value ?? item.rating, genres: detail.genres, summary: detail.overview, palette: item.palette, artwork: item.artwork, actionLabel, onAction })
+    } catch { setNotice("读取作品详情失败") }
   }
 
   function toggleSaved(item: DiscoverItem) {
@@ -202,7 +220,7 @@ export function DiscoverExplorePage() {
         </div>
         {items.length ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
-            {items.map((item) => <PosterCard key={item.id} item={item} saved={saved.includes(item.id)} onOpen={(item) => openMediaDetail({ title: item.title, originalTitle: item.originalTitle, kind: item.kind, year: item.year, region: item.region, rating: item.rating, source: discoverSources.find((entry) => entry.id === item.source)?.label, genres: item.genres, summary: item.summary, palette: item.palette, artwork: item.artwork, actionLabel: saved.includes(item.id) ? "从片单移除" : "加入片单", onAction: () => toggleSaved(item) })} onSave={toggleSaved} />)}
+            {items.map((item) => <PosterCard key={item.id} item={item} saved={saved.includes(item.id)} onOpen={(item) => void openDiscoverItem(item, saved.includes(item.id) ? "从片单移除" : "加入片单", () => toggleSaved(item))} onSave={toggleSaved} />)}
           </div>
         ) : (
           <div className="flex min-h-56 flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-muted/20 px-6 text-center">
@@ -225,8 +243,8 @@ export function DiscoverExplorePage() {
               </div>
               <h3 className="mt-5 text-sm font-semibold">代表作品</h3>
               <div className="mt-2 flex flex-col gap-2">
-                {discoverItems.filter((item) => selectedPerson.knownFor.includes(item.title)).map((item) => (
-                  <button key={item.id} type="button" onClick={() => { setSelectedPerson(null); openMediaDetail({ title: item.title, originalTitle: item.originalTitle, kind: item.kind, year: item.year, region: item.region, rating: item.rating, source: discoverSources.find((entry) => entry.id === item.source)?.label, genres: item.genres, summary: item.summary, palette: item.palette, artwork: item.artwork }) }} className="flex items-center justify-between rounded-lg border px-3 py-2 text-left hover:bg-muted/60">
+                {sourceItems.filter((item) => selectedPerson.knownFor.includes(item.title)).map((item) => (
+                  <button key={item.id} type="button" onClick={() => { setSelectedPerson(null); void openDiscoverItem(item) }} className="flex items-center justify-between rounded-lg border px-3 py-2 text-left hover:bg-muted/60">
                     <span className="min-w-0"><span className="block truncate text-sm font-medium">{item.title}</span><span className="text-xs text-muted-foreground">{item.year} · {item.kind}</span></span>
                     <span className="text-sm tabular-nums text-muted-foreground">★ {item.rating.toFixed(1)}</span>
                   </button>
