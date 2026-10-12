@@ -51,7 +51,12 @@ export type MediaDetail = MediaSummary & {
   status?: string
   tagline?: string
   externalIds?: { imdb?: string; tmdb?: string }
-  credits?: Array<{ name: string; role: string; personId?: string }>
+  credits?: Array<{
+    name: string
+    role: string
+    personId?: string
+    profilePath?: string | null
+  }>
   seasons?: Array<{
     seasonNumber: number
     episodeCount?: number

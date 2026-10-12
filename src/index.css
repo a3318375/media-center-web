@@ -4,6 +4,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@media (hover: none) {
+  .media-poster-overlay {
+    opacity: 1;
+  }
+}
+
 @font-face {
   font-family: "Geist";
   src: url("/fonts/geist-sans/Geist-Variable.woff2") format("woff2");

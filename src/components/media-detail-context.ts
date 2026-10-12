@@ -16,7 +16,12 @@ export type MediaDetailRecord = {
   sourceLabel?: string
   mediaType?: MediaType
   ratings?: ProviderRating[]
-  credits?: Array<{ name: string; role: string; personId?: string }>
+  credits?: Array<{
+    name: string
+    role: string
+    personId?: string
+    profilePath?: string | null
+  }>
   seasons?: Array<{
     seasonNumber: number
     episodeCount?: number
@@ -30,6 +35,8 @@ export type MediaDetailRecord = {
     synonyms?: string[]
   }
   stale?: boolean
+  detailLoading?: boolean
+  detailError?: string
   originalTitle?: string
   kind: string
   year?: number

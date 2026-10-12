@@ -1,11 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import {
-  FlameIcon,
-  RotateCwIcon,
-  StarIcon,
-  TrophyIcon,
-} from "lucide-react"
-import { cn } from "@/lib/utils"
+import { FlameIcon, RotateCwIcon, TrophyIcon } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -24,12 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs"
-import { MediaPoster } from "@/components/media-poster"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { MediaPosterCard } from "@/components/media-poster-card"
 import { useMediaDetail } from "@/components/media-detail-context"
 import {
   mediaApi,
@@ -37,7 +27,7 @@ import {
   type RankingsResponse,
 } from "@/lib/media-api"
 import type { MediaSummary } from "@/lib/media-contract"
-import { formatRegion, mediaImageUrl, presentTitle } from "@/lib/media-presentation"
+import { formatRegion, presentTitle } from "@/lib/media-presentation"
 
 /** 展示用榜单条目：全部来自真实接口，缺失字段留空，不编造。 */
 type RankingEntry = {
@@ -49,8 +39,7 @@ type RankingEntry = {
   rating?: number
   region?: string
   source: string
-  poster?: string
-  palette: string
+  summary: MediaSummary
   provider: MediaSummary["provider"]
   providerId: string
   mediaType: MediaSummary["mediaType"]
@@ -139,22 +128,6 @@ type RankingSectionData = {
   entries: RankingEntry[]
 }
 
-const palettes = [
-  "from-slate-900 via-slate-800 to-slate-900",
-  "from-rose-950 via-rose-900 to-slate-900",
-  "from-indigo-950 via-indigo-900 to-slate-900",
-  "from-emerald-950 via-emerald-900 to-slate-900",
-  "from-amber-950 via-amber-900 to-slate-900",
-  "from-cyan-950 via-cyan-900 to-slate-900",
-]
-
-function paletteFor(value: string) {
-  let hash = 0
-  for (let index = 0; index < value.length; index += 1)
-    hash = (hash * 31 + value.charCodeAt(index)) % 100000
-  return palettes[hash % palettes.length]
-}
-
 function kindLabel(mediaType: string) {
   if (mediaType === "movie") return "电影"
   if (mediaType === "anime") return "动画"
@@ -162,10 +135,7 @@ function kindLabel(mediaType: string) {
   return mediaType
 }
 
-function toEntry(
-  item: MediaSummary,
-  sourceLabel: string
-): RankingEntry {
+function toEntry(item: MediaSummary, sourceLabel: string): RankingEntry {
   const title = presentTitle(item)
   return {
     id: item.mediaId,
@@ -176,8 +146,7 @@ function toEntry(
     rating: item.ratings?.[0]?.value,
     region: cityOrRegion(item),
     source: sourceLabel,
-    poster: mediaImageUrl(item.posterPath),
-    palette: paletteFor(item.mediaId),
+    summary: item,
     provider: item.provider,
     providerId: item.providerId,
     mediaType: item.mediaType,
@@ -201,66 +170,12 @@ function RankingPoster({
   onOpen: (entry: RankingEntry) => void
 }) {
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(entry)}
-      className="group w-32 shrink-0 overflow-hidden rounded-xl border bg-card text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-36"
-      aria-label={"查看第 " + (index + 1) + " 名《" + entry.title + "》详情"}
-    >
-      <div
-        className={cn(
-          "relative flex aspect-[2/3] flex-col justify-between overflow-hidden bg-gradient-to-br p-3 text-white",
-          entry.palette
-        )}
-      >
-        {entry.poster && (
-          <MediaPoster
-            src={entry.poster}
-            alt={entry.title}
-            loading="lazy"
-            className="absolute inset-0 size-full object-cover opacity-70"
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/45" />
-        <div className="absolute -right-6 -top-6 size-28 rounded-full border-[14px] border-white/10" />
-        <div className="relative flex items-start justify-between gap-2">
-          <Badge
-            variant="secondary"
-            className={cn(
-              "bg-black/45 text-white tabular-nums",
-              index < 3 && "bg-primary text-primary-foreground"
-            )}
-          >
-            {index + 1}
-          </Badge>
-          {entry.rating !== undefined && (
-            <Badge variant="secondary" className="gap-1 bg-black/40 text-amber-200">
-              <StarIcon className="size-3 fill-current" />
-              {entry.rating.toFixed(1)}
-            </Badge>
-          )}
-        </div>
-        <div className="relative">
-          <p className="text-lg font-black leading-tight tracking-tight">
-            {entry.title}
-          </p>
-          <span className="mt-1 block text-[10px] font-medium uppercase tracking-[0.15em] text-white/70">
-            {entry.source}
-          </span>
-        </div>
-      </div>
-      <div className="p-2.5">
-        <p className="truncate text-xs font-semibold">{entry.title}</p>
-        {entry.subtitle && (
-          <p className="truncate text-[11px] text-muted-foreground">
-            {entry.subtitle}
-          </p>
-        )}
-        <p className="mt-1 truncate text-[11px] text-muted-foreground">
-          {entry.year ?? "年份未知"} · {entry.kind}
-        </p>
-      </div>
-    </button>
+    <MediaPosterCard
+      item={entry.summary}
+      sourceLabel={entry.source}
+      rank={index + 1}
+      onOpen={() => onOpen(entry)}
+    />
   )
 }
 
@@ -290,7 +205,7 @@ function RankingSection({
           <div className="flex items-center gap-2">
             <Badge
               variant="outline"
-              className="text-[10px] font-semibold uppercase tracking-wide"
+              className="text-[10px] font-semibold tracking-wide uppercase"
             >
               {source}
             </Badge>
@@ -356,7 +271,6 @@ export function RankingsPage() {
       })
     return () => {
       controller.abort()
-      detailRequest.current?.abort()
     }
   }, [revision])
 
@@ -396,9 +310,7 @@ export function RankingsPage() {
           ? item
           : {
               ...item,
-              entries: item.entries.filter(
-                (entry) => entry.region === region
-              ),
+              entries: item.entries.filter((entry) => entry.region === region),
             }
       )
   }, [sections, category, region])
@@ -413,6 +325,17 @@ export function RankingsPage() {
     const controller = new AbortController()
     detailRequest.current = controller
     setNotice("")
+    const initial = {
+      ...entry.summary,
+      kind: entry.kind,
+      sourceLabel: entry.source,
+      summary: entry.summary.overview,
+      rating: entry.summary.ratings?.[0]?.value,
+      actionLabel: savedIds.includes(entry.id) ? "从片单移除" : "加入片单",
+      onAction: () => toggleSaved(entry),
+      detailLoading: true,
+    }
+    openMediaDetail(initial)
     try {
       const detail = await mediaApi.fetchDetail(
         entry.provider,
@@ -427,11 +350,17 @@ export function RankingsPage() {
         sourceLabel: entry.source,
         summary: detail.overview,
         rating: detail.ratings?.[0]?.value,
+        detailLoading: false,
         actionLabel: savedIds.includes(entry.id) ? "从片单移除" : "加入片单",
         onAction: () => toggleSaved(entry),
       })
     } catch (error) {
-      if (!controller.signal.aborted) setNotice(formatMediaError(error))
+      if (!controller.signal.aborted)
+        openMediaDetail({
+          ...initial,
+          detailLoading: false,
+          detailError: formatMediaError(error),
+        })
     }
   }
 
@@ -461,7 +390,9 @@ export function RankingsPage() {
   return (
     <div className="flex flex-col gap-4 p-4 sm:gap-5 sm:p-6 lg:p-7">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm">
-        <p className="text-muted-foreground">浏览热门影视、动画与流媒体榜单。</p>
+        <p className="text-muted-foreground">
+          浏览热门影视、动画与流媒体榜单。
+        </p>
         <div className="flex items-center gap-3">
           <Badge variant="outline" className="gap-1.5 font-normal">
             <FlameIcon />
@@ -496,7 +427,10 @@ export function RankingsPage() {
             </Button>
           </div>
 
-          <Tabs value={platform} onValueChange={(value) => value && setPlatform(value)}>
+          <Tabs
+            value={platform}
+            onValueChange={(value) => value && setPlatform(value)}
+          >
             <TabsList
               variant="line"
               className="w-full justify-start gap-1 overflow-x-auto rounded-none p-0"
@@ -516,8 +450,14 @@ export function RankingsPage() {
               value={category}
               onValueChange={(value) => value && setCategory(value)}
             >
-              <TabsList variant="pill" className="h-auto w-full flex-wrap lg:w-fit">
-                <TabsTrigger value="all" className="flex-none px-3 py-2 text-xs">
+              <TabsList
+                variant="pill"
+                className="h-auto w-full flex-wrap lg:w-fit"
+              >
+                <TabsTrigger
+                  value="all"
+                  className="flex-none px-3 py-2 text-xs"
+                >
                   全部榜单
                 </TabsTrigger>
                 {sections.map((section) => (
@@ -575,7 +515,8 @@ export function RankingsPage() {
               {platform} ·{" "}
               {category === "all"
                 ? "全部榜单"
-                : (sections.find((item) => item.id === category)?.source ?? "")}{" "}
+                : (sections.find((item) => item.id === category)?.source ??
+                  "")}{" "}
               · {region}
             </CardDescription>
             <CardTitle className="mt-1 text-xl">榜单推荐</CardTitle>
@@ -606,9 +547,7 @@ export function RankingsPage() {
                     : "未支持 · 不用其它数据源冒充"
                 }
                 entries={
-                  section.supported && section.available
-                    ? section.entries
-                    : []
+                  section.supported && section.available ? section.entries : []
                 }
                 onOpen={(entry) => void open(entry)}
               />

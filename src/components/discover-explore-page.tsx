@@ -1,12 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
-  BookmarkIcon,
-  CheckIcon,
   FilmIcon,
   RotateCwIcon,
   SearchIcon,
   SparklesIcon,
-  StarIcon,
   UsersIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -23,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { MediaPoster } from "@/components/media-poster"
+import { MediaPosterCard } from "@/components/media-poster-card"
 import { useMediaDetail } from "@/components/media-detail-context"
 import {
   mediaApi,
@@ -35,12 +32,7 @@ import type {
   MediaSummary,
   ProviderCapabilities,
 } from "@/lib/media-contract"
-import {
-  formatRegion,
-  formatResultTotal,
-  mediaImageUrl,
-  presentTitle,
-} from "@/lib/media-presentation"
+import { formatResultTotal } from "@/lib/media-presentation"
 
 /** 来源页签标签与顺序：沿用原有页面。 */
 const sourceTabLabels: Record<string, string> = {
@@ -220,95 +212,6 @@ function FilterRow({
   )
 }
 
-function PosterCard({
-  item,
-  saved,
-  onOpen,
-  onSave,
-}: {
-  item: MediaSummary
-  saved: boolean
-  onOpen: (item: MediaSummary) => void
-  onSave: (item: MediaSummary) => void
-}) {
-  const title = presentTitle(item)
-  const image = mediaImageUrl(item.posterPath)
-  return (
-    <Card className="group overflow-hidden p-0 transition-all hover:-translate-y-0.5 hover:shadow-md">
-      <button
-        type="button"
-        onClick={() => onOpen(item)}
-        className="relative block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={"查看《" + title.title + "》详情"}
-      >
-        <div className="relative flex aspect-[2/3] flex-col justify-between overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-3 text-white">
-          {image && (
-            <MediaPoster
-              loading="lazy"
-              src={image}
-              alt={title.title}
-              className="absolute inset-0 size-full object-cover"
-            />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-black/45" />
-          <div className="absolute -right-8 top-1/4 size-36 rounded-full border-[18px] border-white/10" />
-          <div className="relative flex items-start justify-between gap-2">
-            <Badge
-              variant="secondary"
-              className="bg-black/30 text-white backdrop-blur"
-            >
-              {label(item.mediaType)}
-            </Badge>
-            {item.ratings?.[0]?.value !== undefined && (
-              <Badge
-                variant="secondary"
-                className="gap-1 bg-black/35 text-amber-200 backdrop-blur"
-              >
-                <StarIcon className="size-3 fill-current" />
-                {item.ratings[0].value.toFixed(1)}
-              </Badge>
-            )}
-          </div>
-          <div className="relative px-1 pb-1">
-            <p className="whitespace-pre-line text-2xl font-black leading-[1.05] tracking-tight sm:text-3xl">
-              {title.title}
-            </p>
-            {title.subtitle && (
-              <p className="mt-2 line-clamp-1 text-[10px] font-medium uppercase tracking-[0.12em] text-white/75">
-                {title.subtitle}
-              </p>
-            )}
-          </div>
-        </div>
-      </button>
-      <CardContent className="flex min-w-0 items-start justify-between gap-2 p-3">
-        <button
-          type="button"
-          onClick={() => onOpen(item)}
-          className="min-w-0 flex-1 text-left"
-        >
-          <p className="truncate text-sm font-semibold">{title.title}</p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">
-            {item.year ?? "年份未知"} · {label(item.mediaType)}
-            {item.originCountries?.length || item.region
-              ? ` · ${formatRegion(item.originCountries, item.region)}`
-              : ""}
-          </p>
-        </button>
-        <Button
-          variant={saved ? "secondary" : "ghost"}
-          size="icon-sm"
-          aria-label={(saved ? "从片单移除《" : "加入片单《") + title.title + "》"}
-          aria-pressed={saved}
-          onClick={() => onSave(item)}
-        >
-          {saved ? <CheckIcon /> : <BookmarkIcon />}
-        </Button>
-      </CardContent>
-    </Card>
-  )
-}
-
 export function DiscoverExplorePage() {
   const [providers, setProviders] = useState<ProviderCapabilities[]>([])
   const [tab, setTab] = useState("tmdb")
@@ -321,8 +224,6 @@ export function DiscoverExplorePage() {
   const [result, setResult] = useState<DiscoverResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState("")
-  const [opening, setOpening] = useState(false)
-  const [saved, setSaved] = useState<string[]>([])
   const listRequest = useRef<AbortController | null>(null)
   const detailRequest = useRef<AbortController | null>(null)
   const openMediaDetail = useMediaDetail()
@@ -368,8 +269,8 @@ export function DiscoverExplorePage() {
           current === "people"
             ? current
             : data.providers.some(
-                (entry) => entry.source === current && entry.available
-              )
+                  (entry) => entry.source === current && entry.available
+                )
               ? current
               : (data.providers.find((entry) => entry.available)?.source ??
                 "tmdb")
@@ -389,7 +290,6 @@ export function DiscoverExplorePage() {
     return () => {
       controller.abort()
       listRequest.current?.abort()
-      detailRequest.current?.abort()
     }
   }, [revision])
 
@@ -407,7 +307,13 @@ export function DiscoverExplorePage() {
     // 上游无法组合搜索与筛选：搜索时只发送媒体类型与搜索词。
     if (query && provider.supportsSearch) request.query = query
     else {
-      for (const key of ["genre", "region", "season", "status", "sort"] as const) {
+      for (const key of [
+        "genre",
+        "region",
+        "season",
+        "status",
+        "sort",
+      ] as const) {
         if (filters[key] && capabilities[key].includes(filters[key]))
           request[key] = filters[key]
       }
@@ -471,7 +377,6 @@ export function DiscoverExplorePage() {
   function changed(nextPage = 1) {
     listRequest.current?.abort()
     detailRequest.current?.abort()
-    setOpening(false)
     setPage(nextPage)
     setResult(null)
     setNotice("")
@@ -516,16 +421,20 @@ export function DiscoverExplorePage() {
     setRevision((value) => value + 1)
   }
 
-  async function open(
-    item: MediaSummary,
-    actionLabel?: string,
-    onAction?: () => void
-  ) {
+  async function open(item: MediaSummary) {
     detailRequest.current?.abort()
     const controller = new AbortController()
     detailRequest.current = controller
-    setOpening(true)
     setNotice("")
+    const initial = {
+      ...item,
+      sourceLabel: sourceInfo,
+      kind: label(item.mediaType),
+      summary: item.overview,
+      rating: item.ratings?.[0]?.value,
+      detailLoading: true,
+    }
+    openMediaDetail(initial)
     try {
       const detail = await mediaApi.fetchDetail(
         item.provider,
@@ -540,22 +449,16 @@ export function DiscoverExplorePage() {
           kind: label(detail.mediaType),
           summary: detail.overview,
           rating: detail.ratings?.[0]?.value,
-          actionLabel,
-          onAction,
+          detailLoading: false,
         })
     } catch (error) {
-      if (!controller.signal.aborted) setNotice(formatMediaError(error))
-    } finally {
-      if (!controller.signal.aborted) setOpening(false)
+      if (!controller.signal.aborted)
+        openMediaDetail({
+          ...initial,
+          detailLoading: false,
+          detailError: formatMediaError(error),
+        })
     }
-  }
-
-  function toggleSaved(item: MediaSummary) {
-    setSaved((current) =>
-      current.includes(item.mediaId)
-        ? current.filter((id) => id !== item.mediaId)
-        : [...current, item.mediaId]
-    )
   }
 
   const mediaTypeOptions =
@@ -583,79 +486,164 @@ export function DiscoverExplorePage() {
       </div>
 
       <Card className="border-border/70 shadow-none">
-        <CardContent className="flex flex-col gap-3 p-3 xl:flex-row xl:items-center xl:justify-between">
-          <Tabs value={tab} onValueChange={changeSource}>
-            <TabsList variant="pill" className="h-auto w-full flex-wrap xl:w-fit">
-              {tabs.map((entry) => (
-                <TabsTrigger
-                  key={entry.id}
-                  value={entry.id}
-                  disabled={entry.disabled}
-                  title={entry.reason}
-                  className="flex-none px-3 py-2 text-xs sm:text-sm"
-                >
-                  {entry.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-          <form
-            className="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:flex-nowrap"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (!provider?.supportsSearch) return
-              changed()
-              setQuery(queryDraft.trim())
-            }}
-          >
-            <div className="relative min-w-0 flex-1 xl:w-56 xl:flex-none">
-              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                aria-label="搜索作品"
-                value={queryDraft}
-                onChange={(event) => setQueryDraft(event.target.value)}
-                placeholder={
-                  peopleTab
-                    ? "人物数据未接入"
-                    : provider?.supportsSearch
-                      ? "输入片名，按 Enter 搜索"
-                      : "该数据源不支持搜索"
-                }
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <Tabs value={tab} onValueChange={changeSource}>
+              <TabsList
+                variant="pill"
+                className="h-auto w-full flex-wrap xl:w-fit"
+              >
+                {tabs.map((entry) => (
+                  <TabsTrigger
+                    key={entry.id}
+                    value={entry.id}
+                    disabled={entry.disabled}
+                    title={entry.reason}
+                    className="flex-none px-3 py-2 text-xs sm:text-sm"
+                  >
+                    {entry.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+            <form
+              className="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:flex-nowrap"
+              onSubmit={(event) => {
+                event.preventDefault()
+                if (!provider?.supportsSearch) return
+                changed()
+                setQuery(queryDraft.trim())
+              }}
+            >
+              <div className="relative min-w-0 flex-1 xl:w-56 xl:flex-none">
+                <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  aria-label="搜索作品"
+                  value={queryDraft}
+                  onChange={(event) => setQueryDraft(event.target.value)}
+                  placeholder={
+                    peopleTab
+                      ? "人物数据未接入"
+                      : provider?.supportsSearch
+                        ? "输入片名，按 Enter 搜索"
+                        : "该数据源不支持搜索"
+                  }
+                  disabled={!provider?.supportsSearch}
+                  maxLength={200}
+                  className="h-9 pl-9"
+                />
+              </div>
+              <Button
+                type="submit"
+                size="lg"
                 disabled={!provider?.supportsSearch}
-                maxLength={200}
-                className="h-9 pl-9"
-              />
+              >
+                <SearchIcon data-icon="inline-start" />
+                搜索
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={clearSearch}
+              >
+                清空
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={resetFilters}
+                disabled={peopleTab}
+              >
+                重置
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={refresh}
+                disabled={loading}
+              >
+                <RotateCwIcon
+                  data-icon="inline-start"
+                  className={loading ? "animate-spin" : undefined}
+                />
+                {loading ? "刷新中" : "刷新"}
+              </Button>
+            </form>
+          </div>
+
+          {provider && !peopleTab && (
+            <div className="mt-3 border-t border-border/70 pt-2">
+              {mediaTypeOptions.length > 0 && (
+                <FilterRow
+                  label="影视类别"
+                  options={[
+                    { value: "全部", label: "全部" },
+                    ...mediaTypeOptions.map((value) => ({
+                      value,
+                      label: label(value),
+                    })),
+                  ]}
+                  value={mediaType || "全部"}
+                  disabled={Boolean(query)}
+                  onChange={(value) => {
+                    changed()
+                    setMediaType(value === "全部" ? "" : value)
+                    setFilters((current) => ({ ...current, genre: "" }))
+                  }}
+                />
+              )}
+              {(["genre", "region", "season", "status", "sort"] as const).map(
+                (key) => {
+                  const values = provider.filters[key]
+                  if (!values.length) return null
+                  const raw = key === "genre" ? genreOptions : values
+                  const formatter =
+                    key === "region"
+                      ? (value: string) => regionLabels[value] ?? value
+                      : label
+                  return (
+                    <FilterRow
+                      key={key}
+                      label={filterLabels[key]}
+                      options={[
+                        { value: "全部", label: "全部" },
+                        ...raw.map((value) => ({
+                          value,
+                          label: formatter(value),
+                        })),
+                      ]}
+                      value={
+                        filters[key] && values.includes(filters[key])
+                          ? filters[key]
+                          : "全部"
+                      }
+                      disabled={Boolean(query)}
+                      onChange={(value) => setFilter(key, value)}
+                    />
+                  )
+                }
+              )}
+              {yearOptions.length > 0 && (
+                <FilterRow
+                  label="年份"
+                  options={[
+                    { value: "全部", label: "全部" },
+                    ...yearOptions.map((value) => ({ value, label: value })),
+                  ]}
+                  value={
+                    filters.year && yearOptions.includes(filters.year)
+                      ? filters.year
+                      : "全部"
+                  }
+                  disabled={Boolean(query)}
+                  onChange={(value) => setFilter("year", value)}
+                />
+              )}
             </div>
-            <Button type="submit" size="lg" disabled={!provider?.supportsSearch}>
-              <SearchIcon data-icon="inline-start" />
-              搜索
-            </Button>
-            <Button type="button" variant="outline" size="lg" onClick={clearSearch}>
-              清空
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              onClick={resetFilters}
-              disabled={peopleTab}
-            >
-              重置
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              onClick={refresh}
-              disabled={loading}
-            >
-              <RotateCwIcon
-                data-icon="inline-start"
-                className={loading ? "animate-spin" : undefined}
-              />
-              {loading ? "刷新中" : "刷新"}
-            </Button>
-          </form>
+          )}
         </CardContent>
       </Card>
 
@@ -688,89 +676,15 @@ export function DiscoverExplorePage() {
         </Card>
       ) : (
         <>
-          {provider && (
-            <Card className="border-border/70 shadow-none">
-              <CardContent className="px-4 py-2">
-                {mediaTypeOptions.length > 0 && (
-                  <FilterRow
-                    label="影视类别"
-                    options={[
-                      { value: "全部", label: "全部" },
-                      ...mediaTypeOptions.map((value) => ({
-                        value,
-                        label: label(value),
-                      })),
-                    ]}
-                    value={mediaType || "全部"}
-                    disabled={Boolean(query)}
-                    onChange={(value) => {
-                      changed()
-                      setMediaType(value === "全部" ? "" : value)
-                      setFilters((current) => ({ ...current, genre: "" }))
-                    }}
-                  />
-                )}
-                {(["genre", "region", "season", "status", "sort"] as const).map(
-                  (key) => {
-                    const values = provider.filters[key]
-                    if (!values.length) return null
-                    const raw = key === "genre" ? genreOptions : values
-                    const formatter =
-                      key === "region"
-                        ? (value: string) => regionLabels[value] ?? value
-                        : label
-                    return (
-                      <FilterRow
-                        key={key}
-                        label={filterLabels[key]}
-                        options={[
-                          { value: "全部", label: "全部" },
-                          ...raw.map((value) => ({
-                            value,
-                            label: formatter(value),
-                          })),
-                        ]}
-                        value={
-                          filters[key] && values.includes(filters[key])
-                            ? filters[key]
-                            : "全部"
-                        }
-                        disabled={Boolean(query)}
-                        onChange={(value) => setFilter(key, value)}
-                      />
-                    )
-                  }
-                )}
-                {yearOptions.length > 0 && (
-                  <FilterRow
-                    label="年份"
-                    options={[
-                      { value: "全部", label: "全部" },
-                      ...yearOptions.map((value) => ({ value, label: value })),
-                    ]}
-                    value={
-                      filters.year && yearOptions.includes(filters.year)
-                        ? filters.year
-                        : "全部"
-                    }
-                    disabled={Boolean(query)}
-                    onChange={(value) => setFilter("year", value)}
-                  />
-                )}
-              </CardContent>
-            </Card>
-          )}
-
           {query && (
             <p className="text-xs text-muted-foreground">
               标题搜索仅发送媒体类型与搜索词；清空搜索后可使用筛选。
             </p>
           )}
-          {opening && <p role="status">正在读取详情…</p>}
 
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              <p className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
                 {sourceInfo}
               </p>
               <h3 className="mt-1 text-lg font-semibold tracking-tight">
@@ -806,20 +720,14 @@ export function DiscoverExplorePage() {
           {loading && !result ? (
             <p role="status">正在读取{sourceInfo}…</p>
           ) : items.length ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9">
               {items.map((item) => (
-                <PosterCard
+                <MediaPosterCard
                   key={item.mediaId}
                   item={item}
-                  saved={saved.includes(item.mediaId)}
-                  onOpen={(value) =>
-                    void open(
-                      value,
-                      saved.includes(value.mediaId) ? "从片单移除" : "加入片单",
-                      () => toggleSaved(value)
-                    )
-                  }
-                  onSave={toggleSaved}
+                  sourceLabel={sourceTabLabels[item.provider] ?? item.provider}
+                  onOpen={() => void open(item)}
+                  className="w-full sm:w-full"
                 />
               ))}
             </div>

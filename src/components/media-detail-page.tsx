@@ -1,4 +1,4 @@
-import { ArrowLeftIcon, PlayIcon, StarIcon } from "lucide-react"
+import { ArrowLeftIcon, PlayIcon, StarIcon, UserRoundIcon } from "lucide-react"
 import { cn } from "cn"
 import type { MediaDetailRecord } from "@/components/media-detail-context"
 import { Badge } from "@/components/ui/badge"
@@ -24,7 +24,6 @@ export function MediaDetailPage({
   const region = formatRegion(media.originCountries, media.region)
   const imdb = media.externalIds?.imdb
   const isSeries = media.kind !== "电影" && media.kind !== "纪录片"
-  const titleArt = media.artwork ?? title
   const rating = media.rating ?? "—"
   const source = media.sourceLabel ?? media.source ?? "媒体库"
   const summary = media.summary ?? "暂无简介。"
@@ -42,37 +41,28 @@ export function MediaDetailPage({
 
       <section
         className={cn(
-          "relative isolate overflow-hidden rounded-3xl border bg-gradient-to-br p-5 text-white shadow-lg sm:p-8 lg:min-h-72 lg:p-10",
+          "relative isolate overflow-hidden rounded-3xl border bg-gradient-to-br p-4 text-white shadow-md sm:p-6 lg:p-7",
           media.palette ?? "from-indigo-950 via-slate-900 to-blue-950"
         )}
       >
         <div className="absolute inset-0 -z-10 bg-gradient-to-r from-black/75 via-black/55 to-black/20" />
         <div className="absolute top-0 -right-12 -z-10 size-80 rounded-full border-[36px] border-white/5" />
-        <div className="mx-auto flex max-w-6xl flex-col gap-6 sm:flex-row sm:items-center sm:gap-8">
-          <div className="relative flex aspect-[2/3] w-36 shrink-0 flex-col justify-between overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br p-4 shadow-2xl sm:w-44 lg:w-48">
+        <div className="flex w-full max-w-7xl flex-col gap-5 sm:flex-row sm:items-center sm:gap-7">
+          <div className="relative aspect-[2/3] w-32 shrink-0 overflow-hidden rounded-2xl border border-white/20 bg-black/20 shadow-lg sm:w-40 lg:w-44">
             {poster && (
               <MediaPoster
                 src={poster}
                 alt={title}
                 className="absolute inset-0 size-full object-cover"
+                loading="eager"
               />
             )}
-            <div className="absolute -top-8 -right-8 size-32 rounded-full border-[18px] border-white/10" />
-            <Badge className="relative w-fit bg-black/35 text-white">
-              {media.kind}
-            </Badge>
-            <p className="relative text-2xl leading-tight font-black whitespace-pre-line sm:text-3xl">
-              {titleArt}
-            </p>
-            <span className="relative text-[10px] tracking-widest text-white/70 uppercase">
-              {subtitle}
-            </span>
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold tracking-[0.18em] text-white/70 uppercase">
               {source} · {media.kind}
             </p>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
+            <h1 className="mt-2 break-words text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
               {title}
               {media.year && (
                 <span className="ml-3 text-xl font-semibold text-white/70 sm:text-2xl">
@@ -115,9 +105,19 @@ export function MediaDetailPage({
                 </Badge>
               )}
             </div>
-            <p className="mt-4 max-w-4xl text-sm leading-7 text-white/80">
+            <p className="mt-4 max-w-3xl text-sm leading-7 text-white/80">
               {summary}
             </p>
+            {media.detailLoading && (
+              <p role="status" className="mt-2 text-xs text-white/65">
+                正在补充详情和演职员信息…
+              </p>
+            )}
+            {media.detailError && (
+              <p role="status" className="mt-2 text-xs text-amber-200">
+                详情暂时无法加载：{media.detailError}
+              </p>
+            )}
             {(media.actionLabel || media.onAction) && (
               <Button
                 className="mt-5"
@@ -190,7 +190,7 @@ export function MediaDetailPage({
         </Card>
 
         <div className="flex min-w-0 flex-col gap-4">
-          {cast.length > 0 && (
+          {(cast.length > 0 || media.detailLoading || media.detailError) && (
             <Card className="border-border/70 shadow-none">
               <CardHeader>
                 <p className="text-[10px] font-semibold tracking-[0.18em] text-primary uppercase">
@@ -198,36 +198,45 @@ export function MediaDetailPage({
                 </p>
                 <CardTitle>主要演职员</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {cast.length > 0 ? (
+              <CardContent className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12">
                 {cast.map((person, index) => (
                   <div
-                    key={person.name}
+                    key={`${person.personId ?? person.name}:${person.role}:${index}`}
                     className="overflow-hidden rounded-xl border bg-card"
                   >
-                    <div
-                      className={cn(
-                        "flex aspect-[4/3] items-center justify-center bg-gradient-to-br text-3xl font-bold text-white",
-                        [
-                          "from-sky-600 to-indigo-950",
-                          "from-rose-500 to-orange-900",
-                          "from-violet-600 to-slate-950",
-                          "from-emerald-600 to-teal-950",
-                        ][index]
+                    <div className="relative aspect-[4/5] overflow-hidden bg-muted">
+                      {person.profilePath ? (
+                        <MediaPoster
+                          src={mediaImageUrl(person.profilePath, "w185") ?? person.profilePath}
+                          alt={`${person.name} 头像`}
+                          className="absolute inset-0 size-full object-cover object-top"
+                          loading="lazy"
+                          fallbackLabel="暂无头像"
+                        />
+                      ) : (
+                        <div className="flex size-full items-center justify-center text-muted-foreground">
+                          <UserRoundIcon className="size-8" aria-hidden="true" />
+                          <span className="sr-only">暂无头像</span>
+                        </div>
                       )}
-                    >
-                      {person.name.slice(0, 1)}
                     </div>
-                    <div className="p-2">
-                      <p className="truncate text-xs font-semibold">
+                    <div className="space-y-0.5 p-1.5">
+                      <p className="truncate text-xs font-semibold" title={person.name}>
                         {person.name}
                       </p>
-                      <p className="mt-1 text-[10px] text-muted-foreground">
+                      <p className="truncate text-[10px] text-muted-foreground" title={person.role}>
                         {person.role}
                       </p>
                     </div>
                   </div>
                 ))}
               </CardContent>
+              ) : (
+                <CardContent className="text-sm text-muted-foreground">
+                  {media.detailLoading ? "正在加载演职员信息…" : "暂无演职员信息。"}
+                </CardContent>
+              )}
             </Card>
           )}
 
