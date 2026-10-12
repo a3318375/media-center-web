@@ -1,5 +1,4 @@
-import type { MediaDetail, MediaDiscoverQuery, MediaIdentity, MediaPage, ProviderRating } from "@/mocks/data/media-contract"
-import type { DiscoverItem, DiscoverSource } from "@/mocks/data/discover"
+import type { MediaDetail, MediaDiscoverQuery, MediaPage, MediaSummary, MediaType, MediaSource } from "@/lib/media-contract"
 import type { RankingCategory, RankingEntry } from "@/mocks/data/rankings"
 import type { AnimeSubscription } from "@/mocks/data/anime-subscriptions"
 import type { EmbyMediaItem, EmbyResumeItem, EmbySiteId } from "@/mocks/data/emby-dashboard"
@@ -18,18 +17,18 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return response.status === 204 ? undefined as T : response.json() as Promise<T>
 }
 
-export type DiscoverApiItem = DiscoverItem & MediaIdentity & { ratings: ProviderRating[] }
-export type DiscoverResponse = MediaPage<DiscoverApiItem> & { people: Array<{ id: string; name: string; originalName: string; role: string; knownFor: string; popularity: number; palette: string; initials: string }> }
+export type DiscoverApiItem = MediaSummary
+export type DiscoverResponse = MediaPage<DiscoverApiItem>
 export type RankingsResponse = { categories: Array<{ id: RankingCategory; source: string; title: string; description: string }>; lists: Record<RankingCategory, RankingEntry[]> }
 export type EmbyDashboardResponse = { updatedAt: string; warnings: string[]; sites: readonly { id: "all" | EmbySiteId; label: string }[]; stats: Record<"all" | EmbySiteId, { movies: number; series: number; episodes: number; plays: number; viewers: number; hours: number }>; libraries: readonly { id: string; title: string; type: string; count: number; siteId: EmbySiteId }[]; recentlyAdded: EmbyMediaItem[]; continueWatching: EmbyResumeItem[] }
 
 export const mediaApi = {
-  discover(query: MediaDiscoverQuery) {
+  discover(query: MediaDiscoverQuery, signal?: AbortSignal) {
     const params = new URLSearchParams(Object.entries(query).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)] as [string, string]))
-    return request<DiscoverResponse>(`/api/media/discover?${params}`)
+    return request<DiscoverResponse>(`/api/media/discover?${params}`, { signal })
   },
-  detail(source: DiscoverSource, sourceId: string) {
-    return request<MediaDetail>(`/api/media/${source}/${encodeURIComponent(sourceId)}`)
+  detail(source: MediaSource, sourceId: string, mediaType?: MediaType, signal?: AbortSignal) {
+    return request<MediaDetail>(`/api/media/${source}/${encodeURIComponent(sourceId)}${mediaType ? `?mediaType=${mediaType}` : ""}`, { signal })
   },
   rankings() { return request<RankingsResponse>("/api/media/rankings") },
   animeSubscriptions() { return request<AnimeSubscription[]>("/api/subscriptions/anime") },

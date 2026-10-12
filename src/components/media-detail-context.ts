@@ -1,7 +1,11 @@
 import { createContext, useContext } from "react"
-import type { MediaSource, MediaType, ProviderRating } from "@/mocks/data/media-contract"
+import type { MediaSource, MediaType, ProviderRating } from "@/lib/media-contract"
 
 export type MediaDetailRecord = {
+  posterPath?: string | null
+  backdropPath?: string | null
+  provider?: MediaSource
+  providerId?: string
   mediaId?: string
   sourceId?: string
   source?: MediaSource
@@ -14,6 +18,8 @@ export type MediaDetailRecord = {
   originalTitle?: string
   kind: string
   year?: number
+  originCountries?: string[]
+  externalIds?: { imdb?: string; tmdb?: string }
   region?: string
   rating?: number | string
   genres?: string[]

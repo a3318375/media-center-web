@@ -32,6 +32,7 @@ import { APIKeysPanel } from "@/components/api-keys-panel"
 
 type SettingValue = string | boolean | number
 type Section =
+  | "tmdb"
   | "emby"
   | "115"
   | "organize"
@@ -41,6 +42,7 @@ type Section =
   | "api-keys"
 
 const tabs: { value: Section; label: string }[] = [
+  { value: "tmdb", label: "TMDB" },
   { value: "emby", label: "Emby" },
   { value: "115", label: "115 网盘" },
   { value: "organize", label: "媒体整理" },
@@ -446,6 +448,8 @@ export function SettingsPage() {
             </TabsTrigger>
           ))}
         </TabsList>
+
+        <TabsContent value="tmdb" className="pt-5"><FieldGroup><SettingInput id="tmdb-api-key" label="TMDB API Key" type="password" value={stringValue("tmdb.apiKey")} onChange={(value) => update("tmdb.apiKey", value)} placeholder={configuredSecrets.includes("tmdb.apiKey") ? "已保存；输入新值可替换" : "输入 TMDB API Key"} description="服务端加密保存；留空保留现有密钥。" /><SectionSave section="tmdb" saved={savedSections.includes("tmdb")} onSave={save} /></FieldGroup></TabsContent>
 
         <TabsContent value="emby" className="pt-5">
           <FieldGroup className="gap-4">

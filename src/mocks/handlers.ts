@@ -47,6 +47,7 @@ export const handlers = [
     return HttpResponse.json({ items })
   }),
   http.get("/api/media/discover", ({ request }) => {
+    if (new URL(request.url).searchParams.get("source") === "tmdb") return passthrough()
     const url = new URL(request.url)
     const source = url.searchParams.get("source") ?? "tmdb"
     const query = url.searchParams.get("query")?.toLocaleLowerCase()
@@ -63,6 +64,7 @@ export const handlers = [
     return HttpResponse.json({ items, page, pageSize, total: selected.length, hasMore: page * pageSize < selected.length, source, fetchedAt: new Date().toISOString(), stale: false, people: discoverPeople, sources: discoverSources })
   }),
   http.get("/api/media/:source/:sourceId", ({ params }) => {
+    if (params.source === "tmdb" && !String(params.sourceId).startsWith("demo-")) return passthrough()
     const item = discoverItems.find((entry) => entry.source === params.source && sourceIdFor(entry.id) === params.sourceId)
     if (!item) return HttpResponse.json({ message: "未找到媒体条目" }, { status: 404 })
     return HttpResponse.json({ ...item, mediaId: item.id, sourceId: params.sourceId, mediaType: item.kind === "电影" ? "movie" : item.source === "tmdb" || item.source === "douban" ? "tv" : "anime", ratings: [asProviderRating(item.source, item.rating)], overview: item.summary, genres: item.genres, credits: [{ name: "林知夏", role: "主演" }, { name: "周予安", role: "导演" }], seasons: item.kind === "电影" ? [] : [{ seasonNumber: 1, episodeCount: 8, name: "第 1 季" }] })
@@ -78,9 +80,9 @@ export const handlers = [
     return HttpResponse.json(animeSubscriptions[index])
   }),
   http.get("/api/emby/dashboard", () => useBackendAuth ? passthrough() : HttpResponse.json({ updatedAt: new Date().toISOString(), warnings: [], sites: embySites, stats: embyStats, libraries: embyLibraries, recentlyAdded, continueWatching })),
-  http.get("/api/settings/:section", ({ params }) => useBackendAuth ? passthrough() : HttpResponse.json({ values: demoSettings[params.section as string] ?? {}, configuredSecrets: [...configuredSecrets].filter((key) => key.startsWith(`${params.section}.`)) })),
+  http.get("/api/settings/:section", ({ params }) => useBackendAuth || params.section === "tmdb" ? passthrough() : HttpResponse.json({ values: demoSettings[params.section as string] ?? {}, configuredSecrets: [...configuredSecrets].filter((key) => key.startsWith(`${params.section}.`)) })),
   http.put("/api/settings/:section", async ({ params, request }) => {
-    if (useBackendAuth) return passthrough()
+    if (useBackendAuth || params.section === "tmdb") return passthrough()
     const section = params.section as string
     const body = await request.json() as { values?: Record<string, unknown>; clearSecrets?: string[] }
     const values = demoSettings[section] ?? (demoSettings[section] = {})

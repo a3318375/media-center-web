@@ -1,7 +1,9 @@
-export type DiscoverSource = "tmdb" | "douban" | "anilist" | "bangumi" | "people"
+import type { MediaSource, MediaSummary } from "@/lib/media-contract"
+
+export type DiscoverSource = Exclude<MediaSource, "emby"> | "people"
 export type DiscoverMediaType = "all" | "movie" | "tv"
 
-export type DiscoverItem = {
+export type DiscoverItem = Pick<MediaSummary, "title" | "genres"> & {
   id: string
   title: string
   originalTitle: string

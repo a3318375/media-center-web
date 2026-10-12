@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
+import { formatRegion } from "@/lib/media-presentation"
+
 const sampleCast = [
   { name: "林知夏", role: "主要角色" },
   { name: "周予安", role: "主要角色" },
@@ -13,12 +15,14 @@ const sampleCast = [
 ]
 
 export function MediaDetailPage({ media, onBack }: { media: MediaDetailRecord; onBack: () => void }) {
+  const region = formatRegion(media.originCountries, media.region)
+  const imdb = media.externalIds?.imdb
   const isSeries = media.kind !== "电影" && media.kind !== "纪录片"
   const titleArt = media.artwork ?? media.title
   const rating = media.rating ?? "—"
   const source = media.sourceLabel ?? media.source ?? "媒体库"
   const summary = media.summary ?? "暂无简介。"
-  const cast = media.credits ?? (media.source === "emby" ? [] : sampleCast)
+  const cast = media.credits ?? (media.source === "emby" || media.source === "tmdb" ? [] : sampleCast)
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:gap-5 sm:p-6 lg:p-7">
@@ -32,6 +36,7 @@ export function MediaDetailPage({ media, onBack }: { media: MediaDetailRecord; o
         <div className="absolute -right-12 top-0 -z-10 size-80 rounded-full border-[36px] border-white/5" />
         <div className="mx-auto flex max-w-6xl flex-col gap-6 sm:flex-row sm:items-center sm:gap-8">
           <div className="relative flex aspect-[2/3] w-36 shrink-0 flex-col justify-between overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br p-4 shadow-2xl sm:w-44 lg:w-48">
+            {media.posterPath && <img src={`https://image.tmdb.org/t/p/w342${media.posterPath}`} alt={media.title} className="absolute inset-0 size-full object-cover" />}
             <div className="absolute -right-8 -top-8 size-32 rounded-full border-[18px] border-white/10" />
             <Badge className="relative w-fit bg-black/35 text-white">{media.kind}</Badge>
             <p className="relative whitespace-pre-line text-2xl font-black leading-tight sm:text-3xl">{titleArt}</p>
@@ -42,7 +47,7 @@ export function MediaDetailPage({ media, onBack }: { media: MediaDetailRecord; o
             <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">{media.title}{media.year && <span className="ml-3 text-xl font-semibold text-white/70 sm:text-2xl">({media.year})</span>}</h1>
             <div className="mt-4 flex flex-wrap gap-2">
               <Badge variant="secondary" className="gap-1 bg-black/35 text-amber-200"><StarIcon className="size-3 fill-current" />{rating} · {media.ratings?.[0]?.source ?? "评分"}</Badge>
-              {media.region && <Badge variant="secondary" className="bg-black/35 text-white">{media.region}</Badge>}
+              {region && <Badge variant="secondary" className="bg-black/35 text-white">{region}</Badge>}
               {media.year && <Badge variant="secondary" className="bg-black/35 text-white">{media.year}</Badge>}
               {media.status && <Badge variant="secondary" className="bg-black/35 text-white">{media.status}</Badge>}
               {media.episodeInfo && <Badge variant="secondary" className="bg-black/35 text-white">{media.episodeInfo}</Badge>}
@@ -59,9 +64,10 @@ export function MediaDetailPage({ media, onBack }: { media: MediaDetailRecord; o
         <Card className="border-border/70 shadow-none">
           <CardHeader><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Work profile</p><CardTitle>作品资料</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-3 text-sm">
-            {[["类型", media.kind], ["原名", media.originalTitle ?? "—"], ["年份", media.year ?? "—"], ["地区", media.region ?? "—"], ["来源", source], ["状态", media.status ?? (isSeries ? "连载信息待补充" : "已发布")]].map(([label, value]) => (
+            {[["类型", media.kind], ["原名", media.originalTitle ?? "—"], ["年份", media.year ?? "—"], ["地区", region || "—"], ["来源", source], ["状态", media.status ?? (media.source === "tmdb" ? "—" : isSeries ? "连载信息待补充" : "已发布")]].map(([label, value]) => (
               <div key={label} className="flex justify-between gap-3 border-b pb-2 last:border-0"><span className="text-muted-foreground">{label}</span><span className="text-right font-medium">{value}</span></div>
             ))}
+            {imdb && <div className="flex justify-between gap-3 border-b pb-2"><span className="text-muted-foreground">IMDb</span><a className="font-medium text-primary hover:underline" href={`https://www.imdb.com/title/${encodeURIComponent(imdb)}/`} target="_blank" rel="noopener noreferrer">{imdb}</a></div>}
             <div className="flex flex-wrap gap-2 pt-1">{(media.genres?.length ? media.genres : ["暂无标签"]).map((genre) => <Badge key={genre} variant="outline">{genre}</Badge>)}</div>
           </CardContent>
         </Card>
@@ -77,17 +83,17 @@ export function MediaDetailPage({ media, onBack }: { media: MediaDetailRecord; o
             </CardContent>
           </Card>}
 
-          {isSeries && (media.seasons?.length || media.episodeInfo || media.source !== "emby") && <Card className="border-border/70 shadow-none">
+          {isSeries && (media.seasons?.length || media.episodeInfo || media.source !== "emby" && media.source !== "tmdb") && <Card className="border-border/70 shadow-none">
             <CardHeader><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Seasons</p><CardTitle>季与集</CardTitle></CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2">
               {(media.seasons?.length ? media.seasons.map((season) => season.name ?? `第 ${season.seasonNumber} 季`) : media.episodeInfo ? ["第 1 季", "最近更新"] : ["第 1 季", "第 2 季"]).map((season, index) => <div key={season} className="flex items-center gap-3 rounded-xl border p-3">
-                <div className={cn("flex size-14 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-sm font-bold text-white", media.palette ?? "from-indigo-700 to-slate-950")}>{index === 0 ? "S01" : "EP"}</div>
+                <div className={cn("flex size-14 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-sm font-bold text-white", media.palette ?? "from-indigo-700 to-slate-950")}>{media.source === "tmdb" ? `S${media.seasons?.[index]?.seasonNumber ?? "—"}` : index === 0 ? "S01" : "EP"}</div>
                 <div><p className="text-sm font-semibold">{season}</p><p className="mt-1 text-xs text-muted-foreground">{media.seasons?.[index]?.episodeCount ? `${media.seasons[index].episodeCount} 集` : media.episodeInfo ?? "集数信息待补充"}</p></div>
               </div>)}
             </CardContent>
           </Card>}
 
-          {media.source !== "emby" && <Card className="border-border/70 shadow-none">
+          {media.source !== "emby" && media.source !== "tmdb" && <Card className="border-border/70 shadow-none">
             <CardHeader><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Related</p><CardTitle>相关推荐</CardTitle></CardHeader>
             <CardContent className="flex flex-wrap gap-2">{["同类型作品", "相似题材", "同地区作品"].map((label) => <Badge key={label} variant="secondary" className="px-3 py-1.5">{label} · 演示</Badge>)}</CardContent>
           </Card>}
