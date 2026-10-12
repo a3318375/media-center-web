@@ -1,5 +1,9 @@
 import { createContext, useContext } from "react"
-import type { MediaSource, MediaType, ProviderRating } from "@/lib/media-contract"
+import type {
+  MediaSource,
+  MediaType,
+  ProviderRating,
+} from "@/lib/media-contract"
 
 export type MediaDetailRecord = {
   posterPath?: string | null
@@ -13,8 +17,19 @@ export type MediaDetailRecord = {
   mediaType?: MediaType
   ratings?: ProviderRating[]
   credits?: Array<{ name: string; role: string; personId?: string }>
-  seasons?: Array<{ seasonNumber: number; episodeCount?: number; name?: string }>
+  seasons?: Array<{
+    seasonNumber: number
+    episodeCount?: number
+    name?: string
+  }>
   title: string
+  titles?: {
+    native?: string
+    english?: string
+    romaji?: string
+    synonyms?: string[]
+  }
+  stale?: boolean
   originalTitle?: string
   kind: string
   year?: number
@@ -32,7 +47,9 @@ export type MediaDetailRecord = {
   onAction?: () => void
 }
 
-export const MediaDetailContext = createContext<(media: MediaDetailRecord) => void>(() => undefined)
+export const MediaDetailContext = createContext<
+  (media: MediaDetailRecord) => void
+>(() => undefined)
 
 export function useMediaDetail() {
   return useContext(MediaDetailContext)

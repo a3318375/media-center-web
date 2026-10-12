@@ -24,6 +24,12 @@ export type ProviderRating = {
 
 export type MediaSummary = MediaIdentity & {
   title: string
+  titles?: {
+    native?: string
+    english?: string
+    romaji?: string
+    synonyms?: string[]
+  }
   originalTitle?: string
   year?: number
   releaseDate?: string
@@ -58,22 +64,50 @@ export type MediaPage<T> = {
   page: number
   pageSize: number
   total: number | null
+  totalCapped: boolean
+  people: Array<{ name: string; role: string; personId?: string }>
+  message?: string
   hasMore: boolean
   source: MediaSource
   fetchedAt: string
   stale: boolean
 }
 
+export type ProviderCapabilities = {
+  source: MediaSource
+  label: string
+  mediaTypes: MediaType[]
+  filters: {
+    genre: string[]
+    region: string[]
+    year: { min: number; max: number } | null
+    month: boolean
+    season: string[]
+    status: string[]
+    sort: string[]
+  }
+  supportsSearch: boolean
+  supportsRanking: boolean
+  pageSizeMax: number
+  totalCap: number | null
+  available: boolean
+  unavailableReason?: string
+}
+export type MediaProvidersResponse = { providers: ProviderCapabilities[] }
+// Values are validated against the selected provider's runtime capabilities.
 export type MediaDiscoverQuery = {
-  source: "tmdb"
-  mediaType: "movie" | "tv"
+  source: MediaSource
+  mediaType: MediaType
   genre?: string
   region?: string
   year?: number
-  sort?: "popularity.desc" | "vote_average.desc" | "date.desc"
+  month?: number
+  season?: string
+  status?: string
+  sort?: string
   query?: string
   page?: number
-  pageSize?: 20
+  pageSize?: number
 }
 
 export type CachePolicy = {

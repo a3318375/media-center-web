@@ -1,8 +1,6 @@
 import { http, HttpResponse, passthrough } from "msw"
 
 import type { AuthUser } from "@/lib/auth-api"
-import { discoverItems, discoverPeople, discoverSources } from "@/mocks/data/discover"
-import { platformOptions, rankingCategories, rankingLists, regionOptions } from "@/mocks/data/rankings"
 import { animeSubscriptions as initialAnimeSubscriptions } from "@/mocks/data/anime-subscriptions"
 import { continueWatching, embyLibraries, embySites, embyStats, recentlyAdded } from "@/mocks/data/emby-dashboard"
 import type { AnimeSubscriptionStatus } from "@/mocks/data/anime-subscriptions"
@@ -20,9 +18,6 @@ const animeSubscriptions = structuredClone(initialAnimeSubscriptions)
 function publicDemoAPIKey(item: { id: string; name: string; prefix: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null }) {
   return { id: item.id, name: item.name, prefix: item.prefix, createdAt: item.createdAt, lastUsedAt: item.lastUsedAt, revokedAt: item.revokedAt }
 }
-
-const sourceIdFor = (id: string) => id.replace(/^[a-z]+-/, "demo-")
-const asProviderRating = (source: string, value: number) => ({ source, value, voteCount: 1200 })
 
 const demoUser: AuthUser = {
   id: "user-1",
@@ -46,30 +41,6 @@ export const handlers = [
     const items = mockLogs.filter((item) => (!level || item.level === level) && (!source || item.source === source) && (!query || `${item.source} ${item.message}`.toLocaleLowerCase().includes(query))).slice(-Number(url.searchParams.get("limit") ?? 200)).reverse()
     return HttpResponse.json({ items })
   }),
-  http.get("/api/media/discover", ({ request }) => {
-    if (new URL(request.url).searchParams.get("source") === "tmdb") return passthrough()
-    const url = new URL(request.url)
-    const source = url.searchParams.get("source") ?? "tmdb"
-    const query = url.searchParams.get("query")?.toLocaleLowerCase()
-    const selected = discoverItems.filter((item) => item.source === source && (!query || `${item.title} ${item.originalTitle} ${item.summary}`.toLocaleLowerCase().includes(query)))
-    const page = Number(url.searchParams.get("page") ?? 1)
-    const pageSize = Number(url.searchParams.get("pageSize") ?? 50)
-    const items = selected.slice((page - 1) * pageSize, page * pageSize).map((item) => ({
-      ...item,
-      mediaId: item.id,
-      sourceId: sourceIdFor(item.id),
-      mediaType: item.kind === "电影" ? "movie" : item.source === "tmdb" || item.source === "douban" ? "tv" : "anime",
-      ratings: [asProviderRating(item.source, item.rating)],
-    }))
-    return HttpResponse.json({ items, page, pageSize, total: selected.length, hasMore: page * pageSize < selected.length, source, fetchedAt: new Date().toISOString(), stale: false, people: discoverPeople, sources: discoverSources })
-  }),
-  http.get("/api/media/:source/:sourceId", ({ params }) => {
-    if (params.source === "tmdb" && !String(params.sourceId).startsWith("demo-")) return passthrough()
-    const item = discoverItems.find((entry) => entry.source === params.source && sourceIdFor(entry.id) === params.sourceId)
-    if (!item) return HttpResponse.json({ message: "未找到媒体条目" }, { status: 404 })
-    return HttpResponse.json({ ...item, mediaId: item.id, sourceId: params.sourceId, mediaType: item.kind === "电影" ? "movie" : item.source === "tmdb" || item.source === "douban" ? "tv" : "anime", ratings: [asProviderRating(item.source, item.rating)], overview: item.summary, genres: item.genres, credits: [{ name: "林知夏", role: "主演" }, { name: "周予安", role: "导演" }], seasons: item.kind === "电影" ? [] : [{ seasonNumber: 1, episodeCount: 8, name: "第 1 季" }] })
-  }),
-  http.get("/api/media/rankings", () => HttpResponse.json({ categories: rankingCategories, lists: rankingLists, platforms: platformOptions, regions: regionOptions })),
   http.get("/api/subscriptions/anime", () => HttpResponse.json(animeSubscriptions)),
   http.patch("/api/subscriptions/anime/:id", async ({ params, request }) => {
     const patch = await request.json() as { status?: AnimeSubscriptionStatus }
