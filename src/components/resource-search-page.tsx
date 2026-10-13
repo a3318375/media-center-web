@@ -20,6 +20,7 @@ import {
   readMediaSearchHistory,
   readResourceSearchHistory,
   RESOURCE_SEARCH_HISTORY_KEY,
+  RESOURCE_SEARCH_RESULT_KEY,
   saveResourceSearchHistory,
   type MediaSearchHistoryEntry,
   type ResourceSearchHistoryEntry,
@@ -50,11 +51,13 @@ type SavedSearchResult = {
   result: Result
   tab: string
 }
-const LAST_RESULT_KEY = "media-center-last-search-result"
 
 function readSavedSearchResult(storage: Storage): SavedSearchResult | null {
   try {
-    const saved = JSON.parse(storage.getItem(LAST_RESULT_KEY) ?? "null")
+    const saved = JSON.parse(
+      storage.getItem(RESOURCE_SEARCH_RESULT_KEY) ?? "null"
+    )
+    const linksByCloud = saved?.result?.linksByCloud
     if (
       saved &&
       typeof saved === "object" &&
@@ -62,10 +65,17 @@ function readSavedSearchResult(storage: Storage): SavedSearchResult | null {
       saved.result &&
       typeof saved.config.keyword === "string" &&
       typeof saved.result.total === "number" &&
-      saved.result.linksByCloud &&
-      typeof saved.result.linksByCloud === "object"
+      (linksByCloud === undefined ||
+        linksByCloud === null ||
+        (typeof linksByCloud === "object" && !Array.isArray(linksByCloud)))
     ) {
-      return saved as SavedSearchResult
+      return {
+        ...(saved as SavedSearchResult),
+        result: {
+          ...saved.result,
+          linksByCloud: linksByCloud ?? {},
+        },
+      }
     }
   } catch {
     // Ignore stale or malformed session data.
@@ -136,10 +146,18 @@ function ChoiceRow({
     </div>
   )
 }
-export function ResourceSearchPage() {
+export function ResourceSearchPage({
+  searchRequest,
+  onSearchRequestHandled,
+}: {
+  searchRequest: { id: number; keyword: string } | null
+  onSearchRequestHandled: (id: number) => void
+}) {
   const [savedSearch] = useState(() => readSavedSearchResult(sessionStorage))
   const [meta, setMeta] = useState<Meta | null>(null),
-    [query, setQuery] = useState(savedSearch?.config.keyword ?? ""),
+    [query, setQuery] = useState(
+      searchRequest?.keyword ?? savedSearch?.config.keyword ?? ""
+    ),
     [source, setSource] = useState(savedSearch?.config.source ?? "all"),
     [mode, setMode] = useState(savedSearch?.config.mode ?? "merge"),
     [refresh, setRefresh] = useState(false),
@@ -152,12 +170,14 @@ export function ResourceSearchPage() {
     [channels, setChannels] = useState<string[]>(
       savedSearch?.config.channels ?? []
     ),
-    [result, setResult] = useState<Result | null>(savedSearch?.result ?? null),
-    [lastConfig, setLastConfig] = useState<SearchConfig | null>(
-      savedSearch?.config ?? null
+    [result, setResult] = useState<Result | null>(
+      searchRequest ? null : (savedSearch?.result ?? null)
     ),
-    [loading, setLoading] = useState(false),
-    [updating, setUpdating] = useState(false),
+    [lastConfig, setLastConfig] = useState<SearchConfig | null>(
+      searchRequest ? null : (savedSearch?.config ?? null)
+    ),
+    [loading, setLoading] = useState(Boolean(searchRequest)),
+    [updating, setUpdating] = useState(Boolean(searchRequest)),
     [error, setError] = useState(""),
     [history, setHistory] = useState<SearchConfig[]>(() =>
       readResourceSearchHistory(localStorage)
@@ -208,10 +228,9 @@ export function ResourceSearchPage() {
         setChannels(selectedChannels)
         setCloudTypes(selectedClouds)
         setMeta(data)
-        const keyword = new URLSearchParams(window.location.search).get("kw")
-        if (keyword && !savedSearch)
+        if (searchRequest) {
           searchRef.current({
-            keyword,
+            keyword: searchRequest.keyword,
             source: "all",
             mode: "merge",
             cloudTypes: selectedClouds,
@@ -219,17 +238,20 @@ export function ResourceSearchPage() {
             channels: selectedChannels,
             at: Date.now(),
           })
+          onSearchRequestHandled(searchRequest.id)
+        }
       })
-      .catch(
-        (e) =>
-          active &&
-          setError(e instanceof Error ? e.message : "无法读取资源搜索配置")
-      )
+      .catch((e) => {
+        if (!active) return
+        setError(e instanceof Error ? e.message : "无法读取资源搜索配置")
+        setLoading(false)
+        setUpdating(false)
+      })
     return () => {
       active = false
       timers.current.forEach(clearTimeout)
     }
-  }, [savedSearch])
+  }, [savedSearch, searchRequest, onSearchRequestHandled])
   const search = useCallback(
     async (config?: SearchConfig) => {
       const keyword = (config?.keyword ?? query).trim()
@@ -356,7 +378,7 @@ export function ResourceSearchPage() {
     if (!result || !lastConfig) return
     try {
       sessionStorage.setItem(
-        LAST_RESULT_KEY,
+        RESOURCE_SEARCH_RESULT_KEY,
         JSON.stringify({
           config: lastConfig,
           result,
@@ -588,31 +610,6 @@ export function ResourceSearchPage() {
                 没有找到资源链接
               </p>
             )}
-          </CardContent>
-        </Card>
-      )}
-      {!result && !loading && history.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>上一次搜索</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="font-medium">{history[0].keyword}</p>
-            <p className="my-2 text-sm text-muted-foreground">
-              {new Date(history[0].at).toLocaleString()} · {history[0].source} ·{" "}
-              {history[0].mode}
-            </p>
-            <p className="mb-3 text-xs text-muted-foreground">
-              网盘：
-              {history[0].cloudTypes
-                .map((type) => cloudLabels[type] ?? type)
-                .join("、") || "默认"}{" "}
-              · 插件：{history[0].plugins.join("、") || "默认"} · TG：
-              {history[0].channels.join("、") || "默认"}
-            </p>
-            <Button variant="outline" onClick={() => void search(history[0])}>
-              重新搜索
-            </Button>
           </CardContent>
         </Card>
       )}

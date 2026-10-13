@@ -217,7 +217,11 @@ function FilterRow({
   )
 }
 
-export function DiscoverExplorePage() {
+export function DiscoverExplorePage({
+  onResourceSearch,
+}: {
+  onResourceSearch: (keyword: string) => void
+}) {
   const [providers, setProviders] = useState<ProviderCapabilities[]>([])
   const [tab, setTab] = useState("tmdb")
   const [mediaType, setMediaType] = useState("")
@@ -529,8 +533,7 @@ export function DiscoverExplorePage() {
                     at: Date.now(),
                   })
                 )
-                changed()
-                setQuery(keyword)
+                onResourceSearch(keyword)
               }}
             >
               <div className="relative min-w-0 flex-1 xl:w-56 xl:flex-none">
@@ -779,6 +782,7 @@ export function DiscoverExplorePage() {
                   item={item}
                   sourceLabel={sourceTabLabels[item.provider] ?? item.provider}
                   onOpen={() => void open(item)}
+                  onResourceSearch={onResourceSearch}
                   className="w-full sm:w-full"
                 />
               ))}

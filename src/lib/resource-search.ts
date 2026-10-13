@@ -19,6 +19,21 @@ export type MediaSearchHistoryEntry = {
 type SearchHistoryEntry = ResourceSearchHistoryEntry | MediaSearchHistoryEntry
 
 export const RESOURCE_SEARCH_HISTORY_KEY = "media-center-search-history"
+export const RESOURCE_SEARCH_RESULT_KEY = "media-center-last-search-result"
+
+export function clearResourceSearchResult(
+  storage: Pick<Storage, "removeItem">
+) {
+  try {
+    storage.removeItem(RESOURCE_SEARCH_RESULT_KEY)
+  } catch {
+    // Storage may be unavailable in private browsing contexts.
+  }
+}
+
+export function prepareResourceSearch(storage: Pick<Storage, "removeItem">) {
+  clearResourceSearchResult(storage)
+}
 
 export function chooseSearchSource(
   channels: string[],

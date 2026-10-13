@@ -61,12 +61,14 @@ function UnavailableAction({
 export function MediaPosterCard({
   item,
   onOpen,
+  onResourceSearch,
   sourceLabel,
   rank,
   className,
 }: {
   item: MediaSummary
   onOpen: () => void
+  onResourceSearch: (keyword: string) => void
   sourceLabel?: string
   rank?: number
   className?: string
@@ -142,14 +144,7 @@ export function MediaPosterCard({
                 size="icon-sm"
                 aria-label={`搜索《${title.title}》资源`}
                 className="size-8 text-white/80 hover:text-white"
-                onClick={() => {
-                  window.history.pushState(
-                    null,
-                    "",
-                    `/search?kw=${encodeURIComponent(title.title)}`
-                  )
-                  window.dispatchEvent(new PopStateEvent("popstate"))
-                }}
+                onClick={() => onResourceSearch(title.title)}
               >
                 <SearchIcon />
               </Button>

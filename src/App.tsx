@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { LoginPage } from "@/components/login-page"
 import { EmbyDashboard } from "@/components/emby-dashboard"
 import { DiscoverExplorePage } from "@/components/discover-explore-page"
@@ -14,6 +14,7 @@ import { SettingsPage } from "@/components/settings-page"
 import { ResourceSearchPage } from "@/components/resource-search-page"
 import { MediaShell } from "@/layouts/media-shell/media-shell"
 import { getCurrentUser, logout as logoutFromApi } from "@/lib/auth-api"
+import { prepareResourceSearch } from "@/lib/resource-search"
 import type { AuthUser } from "@/lib/auth-api"
 
 const menuTitles: Record<string, string> = {
@@ -37,7 +38,25 @@ export function App() {
   const [activePath, setActivePath] = useState(
     menuTitles[window.location.pathname] ? window.location.pathname : "/emby"
   )
+  const [resourceSearchRequest, setResourceSearchRequest] = useState<{
+    id: number
+    keyword: string
+  } | null>(null)
+  const resourceSearchRequestId = useRef(0)
   const [isCheckingSession, setIsCheckingSession] = useState(!loginRoute)
+
+  const acknowledgeResourceSearchRequest = useCallback((id: number) => {
+    setResourceSearchRequest((current) => (current?.id === id ? null : current))
+  }, [])
+
+  useEffect(() => {
+    if (
+      window.location.pathname === "/search" &&
+      new URLSearchParams(window.location.search).has("kw")
+    ) {
+      window.history.replaceState(null, "", "/search")
+    }
+  }, [activePath])
 
   useEffect(() => {
     function syncActivePath() {
@@ -132,9 +151,29 @@ export function App() {
         ) : activePath === "/emby" ? (
           <EmbyDashboard />
         ) : activePath === "/discover/explore" ? (
-          <DiscoverExplorePage />
+          <DiscoverExplorePage
+            onResourceSearch={(keyword) => {
+              prepareResourceSearch(sessionStorage)
+              resourceSearchRequestId.current += 1
+              setResourceSearchRequest({
+                id: resourceSearchRequestId.current,
+                keyword,
+              })
+              handleNavigate("/search")
+            }}
+          />
         ) : activePath === "/discover/rankings" ? (
-          <RankingsPage />
+          <RankingsPage
+            onResourceSearch={(keyword) => {
+              prepareResourceSearch(sessionStorage)
+              resourceSearchRequestId.current += 1
+              setResourceSearchRequest({
+                id: resourceSearchRequestId.current,
+                keyword,
+              })
+              handleNavigate("/search")
+            }}
+          />
         ) : activePath === "/discover/anime" ? (
           <AnimeSubscriptionsPage />
         ) : activePath === "/tools/logs" ? (
@@ -142,7 +181,10 @@ export function App() {
         ) : activePath === "/settings" ? (
           <SettingsPage />
         ) : activePath === "/search" ? (
-          <ResourceSearchPage />
+          <ResourceSearchPage
+            searchRequest={resourceSearchRequest}
+            onSearchRequestHandled={acknowledgeResourceSearchRequest}
+          />
         ) : (
           <div className="flex flex-1 flex-col p-6 sm:p-8">
             <section className="flex flex-col gap-2">

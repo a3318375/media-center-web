@@ -164,16 +164,19 @@ function RankingPoster({
   entry,
   index,
   onOpen,
+  onResourceSearch,
 }: {
   entry: RankingEntry
   index: number
   onOpen: (entry: RankingEntry) => void
+  onResourceSearch: (keyword: string) => void
 }) {
   return (
     <MediaPosterCard
       item={entry.summary}
       sourceLabel={entry.source}
       rank={index + 1}
+      onResourceSearch={onResourceSearch}
       onOpen={() => onOpen(entry)}
     />
   )
@@ -186,6 +189,7 @@ function RankingSection({
   note,
   entries,
   onOpen,
+  onResourceSearch,
 }: {
   title: string
   source: string
@@ -193,6 +197,7 @@ function RankingSection({
   note?: string
   entries: RankingEntry[]
   onOpen: (entry: RankingEntry) => void
+  onResourceSearch: (keyword: string) => void
 }) {
   if (!entries.length && !note) return null
   return (
@@ -227,6 +232,7 @@ function RankingSection({
               entry={entry}
               index={index}
               onOpen={onOpen}
+              onResourceSearch={onResourceSearch}
             />
           ))}
         </div>
@@ -240,7 +246,11 @@ function RankingSection({
   )
 }
 
-export function RankingsPage() {
+export function RankingsPage({
+  onResourceSearch,
+}: {
+  onResourceSearch: (keyword: string) => void
+}) {
   const [data, setData] = useState<RankingsResponse | null>(null)
   const [platform, setPlatform] = useState("热门")
   const [category, setCategory] = useState("all")
@@ -550,6 +560,7 @@ export function RankingsPage() {
                   section.supported && section.available ? section.entries : []
                 }
                 onOpen={(entry) => void open(entry)}
+                onResourceSearch={onResourceSearch}
               />
             ))
           ) : (
