@@ -31,7 +31,10 @@ import {
 } from "@/lib/settings-api"
 import { APIKeysPanel } from "@/components/api-keys-panel"
 import { getAccessToken } from "@/lib/auth-api"
-import { pansouDefaultChannels } from "@/lib/pansou-defaults"
+import {
+  normalizeResourceChannel,
+  type ResourceSearchMeta,
+} from "@/lib/resource-search"
 
 type SettingValue = string | boolean | number | string[]
 type Section =
@@ -85,6 +88,8 @@ const defaults: Record<string, SettingValue> = {
   "pansou.plugins": [],
   "pansou.cloudTypes": [],
   "pansou.detectionEnabled": false,
+  "pansou.customChannels": [],
+  "pansou.configVersion": 1,
   "account.name": "admin",
   "account.currentPassword": "",
   "account.newPassword": "",
@@ -285,12 +290,10 @@ export function SettingsPage() {
   const [savingBasic, setSavingBasic] = useState(false)
   const [initialAccount, setInitialAccount] = useState("")
   const [notice, setNotice] = useState("")
-  const [resourceMeta, setResourceMeta] = useState<{
-    channels: string[]
-    plugins: { name: string }[]
-    cloudTypes: string[]
-    defaults: { channels: string[]; plugins: string[]; cloudTypes: string[] }
-  } | null>(null)
+  const [resourceMeta, setResourceMeta] = useState<ResourceSearchMeta | null>(
+    null
+  )
+  const [newResourceChannel, setNewResourceChannel] = useState("")
   const [pluginFilter, setPluginFilter] = useState("")
   const [resourceTab, setResourceTab] = useState<
     "channels" | "plugins" | "cloudTypes" | "detection"
@@ -323,14 +326,7 @@ export function SettingsPage() {
       .then(([results, user, metaResponse]) => {
         if (!active) return
         const meta = metaResponse.data as NonNullable<typeof resourceMeta>
-        const metaDefaults = meta.defaults ?? {
-          channels: [],
-          plugins: [],
-          cloudTypes: [],
-        }
-        const effectiveChannels =
-          meta.channels.length > 0 ? meta.channels : pansouDefaultChannels
-        setResourceMeta({ ...meta, channels: effectiveChannels })
+        setResourceMeta(meta)
         const persistedValues = Object.assign(
           {},
           ...results.map(({ result }) => result.values)
@@ -338,33 +334,14 @@ export function SettingsPage() {
         const supportedValues = Object.fromEntries(
           Object.entries(persistedValues).filter(([key]) => key in defaults)
         )
-        const configuredValues = {
-          "pansou.channels": metaDefaults.channels.length
-            ? metaDefaults.channels
-            : effectiveChannels,
-          "pansou.plugins": metaDefaults.plugins.length
-            ? metaDefaults.plugins
-            : meta.plugins.map((plugin) => plugin.name),
-          "pansou.cloudTypes": metaDefaults.cloudTypes.length
-            ? metaDefaults.cloudTypes
-            : meta.cloudTypes,
+        const initialResourceValues = {
+          "pansou.channels": meta.selection.channels,
+          "pansou.plugins": meta.selection.plugins,
+          "pansou.cloudTypes": meta.selection.cloudTypes,
+          "pansou.customChannels": meta.selection.customChannels,
+          "pansou.detectionEnabled": meta.selection.detectionEnabled,
+          "pansou.configVersion": 1,
         }
-        const hasVersionedResourceConfig =
-          Number(persistedValues["pansou.configVersion"] ?? 0) >= 1
-        const allResourceSelectionsEmpty = Object.keys(configuredValues).every(
-          (key) =>
-            !Array.isArray(persistedValues[key]) ||
-            (persistedValues[key] as string[]).length === 0
-        )
-        const useDefaultsForEmptySelections =
-          !hasVersionedResourceConfig || allResourceSelectionsEmpty
-        const initialResourceValues = Object.fromEntries(
-          Object.entries(configuredValues).filter(([key]) => {
-            if (!useDefaultsForEmptySelections) return !(key in persistedValues)
-            const saved = persistedValues[key]
-            return !Array.isArray(saved) || saved.length === 0
-          })
-        )
         setValues((current) => ({
           ...current,
           ...supportedValues,
@@ -714,7 +691,15 @@ export function SettingsPage() {
             {resourceTab === "channels" &&
               (() => {
                 const key = "pansou.channels"
-                const options = resourceMeta?.channels ?? []
+                const custom = Array.isArray(values["pansou.customChannels"])
+                  ? (values["pansou.customChannels"] as string[])
+                  : []
+                const options = [
+                  ...new Set([
+                    ...(resourceMeta?.defaults.channels ?? []),
+                    ...custom,
+                  ]),
+                ]
                 const selected = Array.isArray(values[key])
                   ? (values[key] as string[])
                   : []
@@ -740,6 +725,64 @@ export function SettingsPage() {
                             ? "取消全选"
                             : "全选"}
                         </Button>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                          aria-label="新增 TG 频道"
+                          placeholder="频道名称、@名称或 t.me 链接"
+                          value={newResourceChannel}
+                          onChange={(event) =>
+                            setNewResourceChannel(event.target.value)
+                          }
+                          className="max-w-xs"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const name =
+                              normalizeResourceChannel(newResourceChannel)
+                            if (!name) {
+                              setNotice("请输入有效的 TG 频道名称或 t.me 链接")
+                              return
+                            }
+                            if (options.includes(name)) {
+                              setNotice("频道已存在")
+                              return
+                            }
+                            if (options.length >= 200) {
+                              setNotice("最多支持 200 个 TG 频道")
+                              return
+                            }
+                            update("pansou.customChannels", [...custom, name])
+                            update(key, [...selected, name])
+                            setNewResourceChannel("")
+                          }}
+                        >
+                          添加频道
+                        </Button>
+                        {custom.map((name) => (
+                          <Button
+                            key={name}
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`删除自定义频道 ${name}`}
+                            onClick={() => {
+                              update(
+                                "pansou.customChannels",
+                                custom.filter((item) => item !== name)
+                              )
+                              update(
+                                key,
+                                selected.filter((item) => item !== name)
+                              )
+                            }}
+                          >
+                            {name} · 删除
+                          </Button>
+                        ))}
                       </div>
                       <ToggleGroup
                         multiple
@@ -852,6 +895,7 @@ export function SettingsPage() {
                   ed2k: "电驴",
                   magnet: "磁力",
                   other: "其他",
+                  others: "其他",
                 }
                 return (
                   <SettingField id={key} label="网盘类型">
@@ -905,7 +949,7 @@ export function SettingsPage() {
                 onChange={(checked) =>
                   update("pansou.detectionEnabled", checked)
                 }
-                description="此设置会保存到服务端；自动检测功能尚未接入。"
+                description="自动检测当前可见的网盘链接；检测状态不影响搜索结果。"
               />
             )}
             <SectionSave

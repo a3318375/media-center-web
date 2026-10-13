@@ -1,22 +1,17 @@
+import { ArrowLeftIcon } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { getAccessToken } from "@/lib/auth-api"
 import {
-  chooseSearchSource,
+  resourceSearchPlan,
+  safeResourceURL,
+  RESOURCE_SEARCH_CONFIG_CHANGED,
+  type ResourceSearchMeta,
   readMediaSearchHistory,
   readResourceSearchHistory,
   RESOURCE_SEARCH_HISTORY_KEY,
@@ -27,12 +22,7 @@ import {
 } from "@/lib/resource-search"
 
 type SearchConfig = ResourceSearchHistoryEntry
-type Meta = {
-  plugins: { name: string }[]
-  channels: string[]
-  cloudTypes: string[]
-  defaults: { plugins: string[]; channels: string[]; cloudTypes: string[] }
-}
+type Meta = ResourceSearchMeta
 type Link = {
   cloud: string
   url: string
@@ -41,11 +31,84 @@ type Link = {
   source?: string
   updatedAt?: string
 }
+type LinkHealth = {
+  disk_type: string
+  url: string
+  state: string
+  summary?: string
+  expires_at: number
+}
+const linkHealthLabels: Record<string, string> = {
+  ok: "有效",
+  bad: "失效",
+  locked: "需要提取码",
+  unsupported: "暂不支持检测",
+  uncertain: "待确认",
+}
+const linkHealthKey = (link: Link) =>
+  JSON.stringify([link.cloud, link.url, link.password ?? ""])
+
 type Result = {
   total: number
   items: { title: string; links?: Link[] }[]
   linksByCloud: Record<string, Link[]>
 }
+function mergeResourceSearchResults(current: Result, incoming: Result): Result {
+  const linksByCloud: Record<string, Link[]> = {}
+  const cloudTypes = new Set([
+    ...Object.keys(current.linksByCloud ?? {}),
+    ...Object.keys(incoming.linksByCloud ?? {}),
+  ])
+
+  for (const cloud of cloudTypes) {
+    const links = new Map<string, Link>()
+    for (const link of incoming.linksByCloud?.[cloud] ?? []) {
+      const key = link.url.trim()
+      if (key) links.set(key, link)
+    }
+    for (const link of current.linksByCloud?.[cloud] ?? []) {
+      const key = link.url.trim()
+      if (key && !links.has(key)) links.set(key, link)
+    }
+    if (links.size) linksByCloud[cloud] = [...links.values()]
+  }
+
+  const items = [...(incoming.items ?? [])]
+  const itemKeys = new Set(
+    items.map((item) =>
+      item.links?.length
+        ? item.links
+            .map((link) => link.url.trim())
+            .sort()
+            .join("|")
+        : item.title.trim().toLocaleLowerCase()
+    )
+  )
+  for (const item of current.items ?? []) {
+    const key = item.links?.length
+      ? item.links
+          .map((link) => link.url.trim())
+          .sort()
+          .join("|")
+      : item.title.trim().toLocaleLowerCase()
+    if (!itemKeys.has(key)) {
+      items.push(item)
+      itemKeys.add(key)
+    }
+  }
+
+  return {
+    ...current,
+    ...incoming,
+    total: Object.values(linksByCloud).reduce(
+      (total, links) => total + links.length,
+      0
+    ),
+    items,
+    linksByCloud,
+  }
+}
+
 type SavedSearchResult = {
   config: SearchConfig
   result: Result
@@ -97,6 +160,7 @@ const cloudLabels: Record<string, string> = {
   ed2k: "电驴",
   magnet: "磁力",
   other: "其他",
+  others: "其他",
 }
 function authHeaders() {
   const token = getAccessToken()
@@ -105,70 +169,21 @@ function authHeaders() {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
 }
-function ChoiceRow({
-  label,
-  options,
-  selected,
-  onChange,
-  translate = (value: string) => value,
-}: {
-  label: string
-  options: string[]
-  selected: string[]
-  onChange: (value: string) => void
-  translate?: (value: string) => string
-}) {
-  return (
-    <div className="grid gap-2 sm:grid-cols-[7rem_1fr] sm:items-start">
-      <span className="pt-1.5 text-sm text-muted-foreground">{label}</span>
-      <ToggleGroup
-        multiple
-        value={selected}
-        onValueChange={(values) => {
-          const changed =
-            values.find((value) => !selected.includes(value)) ??
-            selected.find((value) => !values.includes(value))
-          if (changed) onChange(changed)
-        }}
-        className="flex-wrap"
-      >
-        {options.map((value) => (
-          <ToggleGroupItem
-            key={value}
-            value={value}
-            aria-label={value}
-            size="sm"
-          >
-            {translate(value)}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-    </div>
-  )
-}
 export function ResourceSearchPage({
   searchRequest,
   onSearchRequestHandled,
+  showExploreBack,
+  onBackToExplore,
 }: {
   searchRequest: { id: number; keyword: string } | null
   onSearchRequestHandled: (id: number) => void
+  showExploreBack: boolean
+  onBackToExplore: () => void
 }) {
   const [savedSearch] = useState(() => readSavedSearchResult(sessionStorage))
   const [meta, setMeta] = useState<Meta | null>(null),
     [query, setQuery] = useState(
       searchRequest?.keyword ?? savedSearch?.config.keyword ?? ""
-    ),
-    [source, setSource] = useState(savedSearch?.config.source ?? "all"),
-    [mode, setMode] = useState(savedSearch?.config.mode ?? "merge"),
-    [refresh, setRefresh] = useState(false),
-    [cloudTypes, setCloudTypes] = useState<string[]>(
-      savedSearch?.config.cloudTypes ?? []
-    ),
-    [plugins, setPlugins] = useState<string[]>(
-      savedSearch?.config.plugins ?? []
-    ),
-    [channels, setChannels] = useState<string[]>(
-      savedSearch?.config.channels ?? []
     ),
     [result, setResult] = useState<Result | null>(
       searchRequest ? null : (savedSearch?.result ?? null)
@@ -187,98 +202,97 @@ export function ResourceSearchPage({
     ),
     [tab, setTab] = useState(savedSearch?.tab ?? ""),
     [copyMessage, setCopyMessage] = useState("")
+  const [linkHealth, setLinkHealth] = useState<Record<string, LinkHealth>>({})
+  const linkHealthCache = useRef<Record<string, LinkHealth>>({})
   const timers = useRef<number[]>([]),
     runId = useRef(0),
+    requestController = useRef<AbortController | null>(null),
     searchRef = useRef<(config?: SearchConfig) => void>(() => {})
   useEffect(() => {
     let active = true
-    fetch("/api/v1/resources/meta", { headers: authHeaders() })
-      .then((r) => {
-        if (!r.ok) throw Error("无法读取资源搜索配置")
-        return r.json()
+    const controller = new AbortController()
+    const load = () =>
+      fetch("/api/v1/resources/meta", {
+        headers: authHeaders(),
+        signal: controller.signal,
       })
-      .then(async ({ data }) => {
-        let saved: Record<string, unknown> = {}
-        try {
-          const response = await fetch("/api/settings/pansou", {
-            headers: authHeaders(),
-          })
-          if (response.ok) saved = (await response.json()).values ?? {}
-        } catch (error) {
-          saved = {}
-          void error
-        }
-        if (!active) return
-        const selectedPlugins =
-          savedSearch?.config.plugins ??
-          (Array.isArray(saved["pansou.plugins"])
-            ? (saved["pansou.plugins"] as string[])
-            : data.defaults.plugins)
-        const selectedChannels =
-          savedSearch?.config.channels ??
-          (Array.isArray(saved["pansou.channels"])
-            ? (saved["pansou.channels"] as string[])
-            : data.defaults.channels)
-        const selectedClouds =
-          savedSearch?.config.cloudTypes ??
-          (Array.isArray(saved["pansou.cloudTypes"])
-            ? (saved["pansou.cloudTypes"] as string[])
-            : data.defaults.cloudTypes)
-        setPlugins(selectedPlugins)
-        setChannels(selectedChannels)
-        setCloudTypes(selectedClouds)
-        setMeta(data)
-        if (searchRequest) {
-          searchRef.current({
-            keyword: searchRequest.keyword,
-            source: "all",
-            mode: "merge",
-            cloudTypes: selectedClouds,
-            plugins: selectedPlugins,
-            channels: selectedChannels,
-            at: Date.now(),
-          })
-          onSearchRequestHandled(searchRequest.id)
-        }
-      })
-      .catch((e) => {
-        if (!active) return
-        setError(e instanceof Error ? e.message : "无法读取资源搜索配置")
-        setLoading(false)
-        setUpdating(false)
-      })
+        .then((response) => {
+          if (!response.ok) throw Error("无法读取资源搜索配置")
+          return response.json()
+        })
+        .then(({ data }) => {
+          if (active) setMeta(data)
+        })
+        .catch((error: unknown) => {
+          if (!active) return
+          setError(
+            error instanceof Error ? error.message : "无法读取资源搜索配置"
+          )
+          setLoading(false)
+          setUpdating(false)
+        })
+    void load()
+    window.addEventListener(RESOURCE_SEARCH_CONFIG_CHANGED, load)
     return () => {
       active = false
+      controller.abort()
+      window.removeEventListener(RESOURCE_SEARCH_CONFIG_CHANGED, load)
       timers.current.forEach(clearTimeout)
+      requestController.current?.abort()
     }
-  }, [savedSearch, searchRequest, onSearchRequestHandled])
+  }, [])
   const search = useCallback(
     async (config?: SearchConfig) => {
       const keyword = (config?.keyword ?? query).trim()
       if (!keyword) return
       timers.current.forEach(clearTimeout)
       timers.current = []
+      requestController.current?.abort()
+      const controller = new AbortController()
+      requestController.current = controller
       const id = ++runId.current
-      const chosen = {
+      setLoading(true)
+      setUpdating(true)
+      setError("")
+      let currentMeta: Meta
+      try {
+        const response = await fetch("/api/v1/resources/meta", {
+          headers: authHeaders(),
+          signal: controller.signal,
+        })
+        if (!response.ok) throw Error("无法读取资源搜索配置")
+        currentMeta = (await response.json()).data as Meta
+      } catch (error: unknown) {
+        if (runId.current === id && !controller.signal.aborted) {
+          setError(
+            error instanceof Error ? error.message : "无法读取资源搜索配置"
+          )
+          setLoading(false)
+          setUpdating(false)
+        }
+        return
+      }
+      if (controller.signal.aborted || runId.current !== id) return
+      setMeta(currentMeta)
+      const selection = currentMeta.selection
+      const plan = resourceSearchPlan(selection)
+      const chosen: SearchConfig = {
         keyword,
-        source: config?.source ?? source,
-        mode: config?.mode ?? mode,
-        cloudTypes: config?.cloudTypes ?? cloudTypes,
-        plugins: config?.plugins ?? plugins,
-        channels: config?.channels ?? channels,
+        source: plan.fullSource,
+        mode: "merge",
+        cloudTypes: selection.cloudTypes,
+        plugins: selection.plugins,
+        channels: selection.channels,
         at: Date.now(),
       }
       setQuery(keyword)
-      setSource(chosen.source)
-      setMode(chosen.mode)
-      setCloudTypes(chosen.cloudTypes)
-      setPlugins(chosen.plugins)
-      setChannels(chosen.channels)
       setLastConfig(chosen)
       setLoading(true)
       setUpdating(true)
       setError("")
       setResult(null)
+      linkHealthCache.current = {}
+      setLinkHealth({})
       setHistory(saveResourceSearchHistory(localStorage, chosen))
       const call = async (src: string, force: boolean) => {
         const response = await fetch("/api/v1/resources/search", {
@@ -293,6 +307,7 @@ export function ResourceSearchPage({
             channels: chosen.channels,
             refresh: force,
           }),
+          signal: controller.signal,
         })
         const body = await response.json().catch(() => ({}))
         if (!response.ok)
@@ -302,63 +317,71 @@ export function ResourceSearchPage({
         return body.data as Result
       }
       try {
-        const first = await call(
-          chosen.source != "all"
-            ? chosen.source
-            : chooseSearchSource(chosen.channels, chosen.plugins, true),
-          true
-        )
+        if (plan.disabled) {
+          setResult({ total: 0, items: [], linksByCloud: {} })
+          setError("请在全局设置中选择 TG 频道或搜索插件")
+          return
+        }
+        const firstSource = plan.firstSource
+        const refreshSource = plan.fullSource
+        if (plan.warmup) {
+          void call(refreshSource, false).catch((error: unknown) => {
+            if (!controller.signal.aborted)
+              console.warn("资源搜索预热失败", error)
+          })
+        }
+        const first = await call(firstSource, false)
         if (runId.current !== id) return
         setResult(first)
         setTab(Object.keys(first.linksByCloud ?? {})[0] ?? "")
         setLoading(false)
-        const steps = [
-          {
-            delay: 2000,
-            src: chooseSearchSource(chosen.channels, chosen.plugins),
-            refresh: false,
-          },
-          {
-            delay: 2000,
-            src: chooseSearchSource(chosen.channels, chosen.plugins),
-            refresh: false,
-          },
-          ...(chosen.plugins.length
-            ? [
-                {
-                  delay: 3000,
-                  src: chooseSearchSource(chosen.channels, chosen.plugins),
-                  refresh: false,
-                },
-              ]
-            : []),
-        ]
+        const hasPluginSearch = plan.collect
+        const steps = hasPluginSearch
+          ? [2000, 3000, 3000].map((delay) => ({
+              delay,
+              src: refreshSource,
+              refresh: false,
+            }))
+          : []
+        setUpdating(steps.length > 0)
         let previous = Date.now()
         for (const step of steps) {
+          if (controller.signal.aborted) return
           const delay = Math.max(0, step.delay - (Date.now() - previous))
           await new Promise<void>((resolve) => {
             const timer = window.setTimeout(resolve, delay)
             timers.current.push(timer)
+            controller.signal.addEventListener(
+              "abort",
+              () => {
+                window.clearTimeout(timer)
+                resolve()
+              },
+              { once: true }
+            )
           })
-          if (runId.current !== id) return
+          if (runId.current !== id || controller.signal.aborted) return
           try {
             const next = await call(step.src, false)
-            if (runId.current !== id) return
+            if (runId.current !== id || controller.signal.aborted) return
             setResult((current) => {
-              if (!current || next.total >= current.total) {
-                setTab(Object.keys(next.linksByCloud ?? {})[0] ?? "")
-                return next
-              }
-              return current
+              if (!current) return next
+              const merged = mergeResourceSearchResults(current, next)
+              setTab((selectedTab) =>
+                selectedTab && merged.linksByCloud[selectedTab]
+                  ? selectedTab
+                  : (Object.keys(merged.linksByCloud)[0] ?? "")
+              )
+              return merged
             })
           } catch (e) {
-            if (runId.current === id)
+            if (runId.current === id && !controller.signal.aborted)
               setError(e instanceof Error ? e.message : "搜索更新失败")
           }
           previous = Date.now()
         }
       } catch (e) {
-        if (runId.current === id)
+        if (runId.current === id && !controller.signal.aborted)
           setError(e instanceof Error ? e.message : "搜索失败")
       } finally {
         if (runId.current === id) {
@@ -367,13 +390,27 @@ export function ResourceSearchPage({
         }
       }
     },
-    [query, source, mode, cloudTypes, plugins, channels]
+    [query]
   )
   useEffect(() => {
     searchRef.current = (config) => {
       void search(config)
     }
   }, [search])
+  useEffect(() => {
+    if (!searchRequest || !meta) return
+    searchRef.current({
+      keyword: searchRequest.keyword,
+      source: "all",
+      mode: "merge",
+      cloudTypes: [],
+      plugins: [],
+      channels: [],
+      at: Date.now(),
+    })
+    onSearchRequestHandled(searchRequest.id)
+  }, [searchRequest, meta, onSearchRequestHandled])
+
   useEffect(() => {
     if (!result || !lastConfig) return
     try {
@@ -389,16 +426,91 @@ export function ResourceSearchPage({
       // Keep the current in-memory result if the browser storage quota is full.
     }
   }, [lastConfig, result, tab])
-  const toggle = (
-    values: string[],
-    value: string,
-    set: (v: string[]) => void
-  ) =>
-    set(
-      values.includes(value)
-        ? values.filter((v) => v !== value)
-        : [...values, value]
-    )
+  const detectionLinks = JSON.stringify(result?.linksByCloud?.[tab] ?? [])
+  const detectionEnabled = meta?.selection.detectionEnabled ?? false
+  useEffect(() => {
+    if (!detectionEnabled || !window.IntersectionObserver) return
+    const links = JSON.parse(detectionLinks) as Link[]
+    const byKey = new Map(links.map((link) => [linkHealthKey(link), link]))
+    const pending = new Map<string, Link>()
+    const seen = new Set<string>()
+    const controller = new AbortController()
+    let timer: number | undefined
+    let running = false
+    const collect = async () => {
+      if (running || controller.signal.aborted) return
+      running = true
+      try {
+        while (pending.size && !controller.signal.aborted) {
+          const batch = [...pending.entries()].slice(0, 6)
+          batch.forEach(([key]) => pending.delete(key))
+          let results: LinkHealth[]
+          try {
+            const response = await fetch("/api/v1/resources/check", {
+              method: "POST",
+              headers: authHeaders(),
+              signal: controller.signal,
+              body: JSON.stringify({
+                items: batch.map(([, link]) => ({
+                  disk_type: link.cloud,
+                  url: link.url,
+                  password: link.password,
+                })),
+              }),
+            })
+            if (!response.ok) throw new Error("链接检测失败")
+            results = (await response.json()).results as LinkHealth[]
+          } catch {
+            if (controller.signal.aborted) return
+            results = batch.map(([, link]) => ({
+              disk_type: link.cloud,
+              url: link.url,
+              state: "uncertain",
+              summary: "检测失败，可稍后重试",
+              expires_at: Date.now() + 30_000,
+            }))
+          }
+          if (controller.signal.aborted) return
+          const updates: Record<string, LinkHealth> = {}
+          for (const [key, link] of batch) {
+            const health = results.find(
+              (item) => item.disk_type === link.cloud && item.url === link.url
+            )
+            if (health) updates[key] = health
+          }
+          Object.assign(linkHealthCache.current, updates)
+          setLinkHealth((current) => ({ ...current, ...updates }))
+        }
+      } finally {
+        running = false
+      }
+    }
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue
+        const key = (entry.target as HTMLElement).dataset.resourceLink
+        if (!key || seen.has(key)) continue
+        const cached = linkHealthCache.current[key]
+        if (cached && cached.expires_at > Date.now()) continue
+        const link = byKey.get(key)
+        if (!link || !safeResourceURL(link.url)) continue
+        seen.add(key)
+        pending.set(key, link)
+      }
+      if (pending.size && !running) {
+        window.clearTimeout(timer)
+        timer = window.setTimeout(() => void collect(), 220)
+      }
+    })
+    document
+      .querySelectorAll("[data-resource-link]")
+      .forEach((element) => observer.observe(element))
+    return () => {
+      observer.disconnect()
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [detectionEnabled, detectionLinks])
   const copy = async (value: string) => {
     try {
       await navigator.clipboard.writeText(value)
@@ -412,7 +524,15 @@ export function ResourceSearchPage({
     <main className="flex flex-1 flex-col gap-4 p-4 sm:p-6 lg:p-8">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>资源搜索</CardTitle>
+          <div className="flex items-center gap-2">
+            {showExploreBack && (
+              <Button variant="ghost" size="sm" onClick={onBackToExplore}>
+                <ArrowLeftIcon data-icon="inline-start" />
+                返回
+              </Button>
+            )}
+            <CardTitle>资源搜索</CardTitle>
+          </div>
           {(history.length > 0 || mediaHistory.length > 0) && (
             <Button
               variant="ghost"
@@ -427,7 +547,7 @@ export function ResourceSearchPage({
             </Button>
           )}
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="flex flex-col gap-4">
           <div className="flex flex-wrap gap-2">
             <Input
               value={query}
@@ -436,57 +556,9 @@ export function ResourceSearchPage({
               placeholder="输入电影、剧集或动画名称"
               className="min-w-52 flex-1"
             />
-            <label className="flex items-center gap-2 text-sm">
-              <Switch checked={refresh} onCheckedChange={setRefresh} />
-              强制刷新
-            </label>
-            <Select value={mode} onValueChange={(v) => setMode(v ?? "merge")}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="merge">合并结果</SelectItem>
-                <SelectItem value="results">原始结果</SelectItem>
-              </SelectContent>
-            </Select>
             <Button disabled={loading || !meta} onClick={() => void search()}>
               搜索
             </Button>
-          </div>
-          <ChoiceRow
-            label="网盘类型"
-            options={meta?.cloudTypes ?? []}
-            selected={cloudTypes}
-            onChange={(value) => toggle(cloudTypes, value, setCloudTypes)}
-            translate={(value) => cloudLabels[value] ?? value}
-          />
-          <ChoiceRow
-            label="搜索插件"
-            options={meta?.plugins.map((plugin) => plugin.name) ?? []}
-            selected={plugins}
-            onChange={(value) => toggle(plugins, value, setPlugins)}
-          />
-          <ChoiceRow
-            label="TG 频道"
-            options={meta?.channels ?? []}
-            selected={channels}
-            onChange={(value) => toggle(channels, value, setChannels)}
-          />
-          <div className="grid gap-2 sm:grid-cols-[7rem_1fr] sm:items-center">
-            <span className="text-sm text-muted-foreground">数据源</span>
-            <Select
-              value={source}
-              onValueChange={(value) => setSource(value ?? "all")}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部</SelectItem>
-                <SelectItem value="tg">TG</SelectItem>
-                <SelectItem value="plugin">插件</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </CardContent>
       </Card>
@@ -535,7 +607,7 @@ export function ResourceSearchPage({
             </CardTitle>
             {updating && (
               <span className="text-sm text-muted-foreground">
-                正在更新更多结果…
+                正在收集插件结果…
               </span>
             )}
           </CardHeader>
@@ -545,7 +617,8 @@ export function ResourceSearchPage({
                 <TabsList className="max-w-full flex-wrap">
                   {Object.keys(result.linksByCloud).map((k) => (
                     <TabsTrigger key={k} value={k}>
-                      {cloudLabels[k] ?? k}
+                      {cloudLabels[k] ?? k} (
+                      {result.linksByCloud[k]?.length ?? 0})
                     </TabsTrigger>
                   ))}
                 </TabsList>
@@ -558,6 +631,7 @@ export function ResourceSearchPage({
                     {links.map((link, i) => (
                       <article
                         key={`${link.url}-${i}`}
+                        data-resource-link={linkHealthKey(link)}
                         className="rounded-lg border p-3"
                       >
                         <p className="font-medium">
@@ -570,12 +644,23 @@ export function ResourceSearchPage({
                             : (link.note ?? link.url)}
                         </p>
                         <p className="mt-1 text-xs break-all text-muted-foreground">
+                          {detectionEnabled &&
+                            linkHealth[linkHealthKey(link)] && (
+                              <Badge
+                                variant="outline"
+                                title={linkHealth[linkHealthKey(link)].summary}
+                              >
+                                {linkHealthLabels[
+                                  linkHealth[linkHealthKey(link)].state
+                                ] ?? "待确认"}
+                              </Badge>
+                            )}{" "}
                           {link.source}{" "}
                           {link.updatedAt &&
                             `· ${new Date(link.updatedAt).toLocaleString()}`}
                         </p>
                         <a
-                          href={link.url}
+                          href={safeResourceURL(link.url)}
                           target="_blank"
                           rel="noreferrer"
                           className="mt-2 block text-sm break-all text-primary underline"

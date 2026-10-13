@@ -91,7 +91,11 @@ export function saveResourceSearchHistory(
       (item) => !(item.keyword === entry.keyword && item.kind !== "media")
     ),
   ].slice(0, 20)
-  storage.setItem(RESOURCE_SEARCH_HISTORY_KEY, JSON.stringify(next))
+  try {
+    storage.setItem(RESOURCE_SEARCH_HISTORY_KEY, JSON.stringify(next))
+  } catch {
+    /* Search remains usable when browser storage is full. */
+  }
   return next.filter(
     (item): item is ResourceSearchHistoryEntry => item.kind !== "media"
   )
@@ -107,8 +111,70 @@ export function saveMediaSearchHistory(
       (item) => !(item.keyword === entry.keyword && item.kind === "media")
     ),
   ].slice(0, 20)
-  storage.setItem(RESOURCE_SEARCH_HISTORY_KEY, JSON.stringify(next))
+  try {
+    storage.setItem(RESOURCE_SEARCH_HISTORY_KEY, JSON.stringify(next))
+  } catch {
+    /* Search remains usable when browser storage is full. */
+  }
   return next.filter(
     (item): item is MediaSearchHistoryEntry => item.kind === "media"
   )
+}
+
+export const RESOURCE_SEARCH_CONFIG_CHANGED =
+  "media-center-resource-config-changed"
+
+export type ResourceSearchPreferences = {
+  channels: string[]
+  plugins: string[]
+  cloudTypes: string[]
+  customChannels: string[]
+  detectionEnabled: boolean
+}
+
+export type ResourceSearchMeta = {
+  defaults: ResourceSearchPreferences
+  selection: ResourceSearchPreferences
+  channels: string[]
+  plugins: { name: string }[]
+  cloudTypes: string[]
+}
+
+export function resourceSearchPlan(selection: ResourceSearchPreferences) {
+  return {
+    firstSource: chooseSearchSource(
+      selection.channels,
+      selection.plugins,
+      true
+    ),
+    fullSource: chooseSearchSource(selection.channels, selection.plugins),
+    warmup: selection.channels.length > 0 && selection.plugins.length > 0,
+    collect: selection.plugins.length > 0,
+    disabled: selection.channels.length === 0 && selection.plugins.length === 0,
+  }
+}
+
+export function normalizeResourceChannel(input: string): string | null {
+  let channel = input.trim().replace(/^@/, "")
+  if (/^https?:\/\//i.test(channel)) {
+    try {
+      const url = new URL(channel)
+      if (url.hostname !== "t.me") return null
+      channel = url.pathname.replace(/^\/(?:s\/)?/, "").replace(/\/$/, "")
+    } catch {
+      return null
+    }
+  }
+  return /^[a-zA-Z0-9_]{1,24}$/.test(channel) ? channel : null
+}
+
+export function safeResourceURL(value: string): string | undefined {
+  try {
+    const url = new URL(value)
+    if (["http:", "https:", "magnet:", "ed2k:"].includes(url.protocol))
+      return value
+  } catch {
+    /* Invalid or executable links must not be navigable. */
+  }
+  return undefined
 }

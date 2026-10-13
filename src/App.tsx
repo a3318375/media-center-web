@@ -42,6 +42,7 @@ export function App() {
     id: number
     keyword: string
   } | null>(null)
+  const [searchReturnToExplore, setSearchReturnToExplore] = useState(false)
   const resourceSearchRequestId = useRef(0)
   const [isCheckingSession, setIsCheckingSession] = useState(!loginRoute)
 
@@ -105,6 +106,19 @@ export function App() {
   function handleNavigate(path: string) {
     window.history.pushState(null, "", path)
     setActivePath(path)
+    setSearchReturnToExplore(false)
+  }
+
+  function handleResourceSearch(keyword: string, fromExplore = false) {
+    prepareResourceSearch(sessionStorage)
+    resourceSearchRequestId.current += 1
+    setResourceSearchRequest({
+      id: resourceSearchRequestId.current,
+      keyword,
+    })
+    setSelectedMedia(null)
+    handleNavigate("/search")
+    setSearchReturnToExplore(fromExplore)
   }
 
   async function handleLogout() {
@@ -147,45 +161,21 @@ export function App() {
           <MediaDetailPage
             media={selectedMedia}
             onBack={() => setSelectedMedia(null)}
+            onResourceSearch={(keyword) => handleResourceSearch(keyword)}
           />
         ) : activePath === "/emby" ? (
           <EmbyDashboard />
         ) : activePath === "/discover/explore" ? (
-          <DiscoverExplorePage
-            onResourceSearch={(keyword) => {
-              prepareResourceSearch(sessionStorage)
-              resourceSearchRequestId.current += 1
-              setResourceSearchRequest({
-                id: resourceSearchRequestId.current,
-                keyword,
-              })
-              handleNavigate("/search")
-            }}
-          />
+          <DiscoverExplorePage onResourceSearch={(keyword) => handleResourceSearch(keyword, true)} />
         ) : activePath === "/discover/rankings" ? (
-          <RankingsPage
-            onResourceSearch={(keyword) => {
-              prepareResourceSearch(sessionStorage)
-              resourceSearchRequestId.current += 1
-              setResourceSearchRequest({
-                id: resourceSearchRequestId.current,
-                keyword,
-              })
-              handleNavigate("/search")
-            }}
-          />
+          <RankingsPage onResourceSearch={(keyword) => handleResourceSearch(keyword)} />
         ) : activePath === "/discover/anime" ? (
           <AnimeSubscriptionsPage />
         ) : activePath === "/tools/logs" ? (
           <LogsPage />
         ) : activePath === "/settings" ? (
           <SettingsPage />
-        ) : activePath === "/search" ? (
-          <ResourceSearchPage
-            searchRequest={resourceSearchRequest}
-            onSearchRequestHandled={acknowledgeResourceSearchRequest}
-          />
-        ) : (
+        ) : activePath === "/search" ? null : (
           <div className="flex flex-1 flex-col p-6 sm:p-8">
             <section className="flex flex-col gap-2">
               <h2 className="text-2xl font-semibold tracking-tight">
@@ -197,6 +187,19 @@ export function App() {
             </section>
           </div>
         )}
+        <div
+          className={
+            activePath === "/search" && !selectedMedia ? "contents" : "hidden"
+          }
+          aria-hidden={activePath !== "/search" || Boolean(selectedMedia)}
+        >
+          <ResourceSearchPage
+            searchRequest={resourceSearchRequest}
+            onSearchRequestHandled={acknowledgeResourceSearchRequest}
+            showExploreBack={searchReturnToExplore}
+            onBackToExplore={() => handleNavigate("/discover/explore")}
+          />
+        </div>
       </MediaShell>
     </MediaDetailContext.Provider>
   )

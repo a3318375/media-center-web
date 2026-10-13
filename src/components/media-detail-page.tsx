@@ -1,4 +1,4 @@
-import { ArrowLeftIcon, PlayIcon, StarIcon, UserRoundIcon } from "lucide-react"
+import { ArrowLeftIcon, PlayIcon, SearchIcon, StarIcon, UserRoundIcon } from "lucide-react"
 import { cn } from "cn"
 import type { MediaDetailRecord } from "@/components/media-detail-context"
 import { Badge } from "@/components/ui/badge"
@@ -15,9 +15,11 @@ import {
 export function MediaDetailPage({
   media,
   onBack,
+  onResourceSearch,
 }: {
   media: MediaDetailRecord
   onBack: () => void
+  onResourceSearch: (keyword: string) => void
 }) {
   const { title, subtitle } = presentTitle(media)
   const poster = mediaImageUrl(media.posterPath)
@@ -118,16 +120,24 @@ export function MediaDetailPage({
                 详情暂时无法加载：{media.detailError}
               </p>
             )}
-            {(media.actionLabel || media.onAction) && (
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              {(media.actionLabel || media.onAction) && (
+                <Button
+                  variant="secondary"
+                  onClick={media.onAction ?? (() => undefined)}
+                >
+                  <PlayIcon data-icon="inline-start" />
+                  {media.actionLabel ?? "加入片单"}
+                </Button>
+              )}
               <Button
-                className="mt-5"
                 variant="secondary"
-                onClick={media.onAction ?? (() => undefined)}
+                onClick={() => onResourceSearch(title)}
               >
-                <PlayIcon data-icon="inline-start" />
-                {media.actionLabel ?? "加入片单"}
+                <SearchIcon data-icon="inline-start" />
+                搜网盘资源
               </Button>
-            )}
+            </div>
           </div>
         </div>
       </section>

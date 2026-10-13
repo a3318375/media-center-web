@@ -1,3 +1,4 @@
+import { RESOURCE_SEARCH_CONFIG_CHANGED } from "./resource-search"
 import { getAccessToken } from "@/lib/auth-api"
 
 export type SettingValue = string | boolean | number | string[]
@@ -36,7 +37,10 @@ export const settingsApi = {
   get(section: SettingsSection) {
     return request(section, "GET")
   },
-  save(section: SettingsSection, values: Record<string, SettingValue>) {
-    return request(section, "PUT", { values })
+  async save(section: SettingsSection, values: Record<string, SettingValue>) {
+    const result = await request(section, "PUT", { values })
+    if (section === "pansou")
+      window.dispatchEvent(new Event(RESOURCE_SEARCH_CONFIG_CHANGED))
+    return result
   },
 }
