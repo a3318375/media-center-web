@@ -1,14 +1,19 @@
 import { getAccessToken } from "@/lib/auth-api"
 
-export type SettingValue = string | boolean | number
-export type SettingsSection = "tmdb" | "emby" | "115" | "organize" | "search" | "notifications"
+export type SettingValue = string | boolean | number | string[]
+export type SettingsSection =
+  "tmdb" | "emby" | "115" | "organize" | "search" | "pansou" | "notifications"
 
 type SettingsResponse = {
   values: Record<string, SettingValue>
   configuredSecrets: string[]
 }
 
-async function request(section: SettingsSection, method: "GET" | "PUT", body?: unknown) {
+async function request(
+  section: SettingsSection,
+  method: "GET" | "PUT",
+  body?: unknown
+) {
   const token = getAccessToken()
   const response = await fetch(`/api/settings/${encodeURIComponent(section)}`, {
     method,
@@ -19,14 +24,18 @@ async function request(section: SettingsSection, method: "GET" | "PUT", body?: u
     ...(body ? { body: JSON.stringify(body) } : {}),
   })
   if (!response.ok) {
-    const error = (await response.json().catch(() => null)) as { message?: string } | null
+    const error = (await response.json().catch(() => null)) as {
+      message?: string
+    } | null
     throw new Error(error?.message ?? "配置请求失败")
   }
   return response.json() as Promise<SettingsResponse>
 }
 
 export const settingsApi = {
-  get(section: SettingsSection) { return request(section, "GET") },
+  get(section: SettingsSection) {
+    return request(section, "GET")
+  },
   save(section: SettingsSection, values: Record<string, SettingValue>) {
     return request(section, "PUT", { values })
   },

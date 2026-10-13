@@ -136,9 +136,23 @@ export function MediaPosterCard({
               </p>
             )}
             <div className="pointer-events-auto mt-auto flex shrink-0 items-center justify-between pt-1">
-              <UnavailableAction label="搜索资源">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`搜索《${title.title}》资源`}
+                className="size-8 text-white/80 hover:text-white"
+                onClick={() => {
+                  window.history.pushState(
+                    null,
+                    "",
+                    `/search?kw=${encodeURIComponent(title.title)}`
+                  )
+                  window.dispatchEvent(new PopStateEvent("popstate"))
+                }}
+              >
                 <SearchIcon />
-              </UnavailableAction>
+              </Button>
               <UnavailableAction label="收藏">
                 <HeartIcon />
               </UnavailableAction>

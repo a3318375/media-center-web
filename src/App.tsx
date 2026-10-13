@@ -6,14 +6,19 @@ import { RankingsPage } from "@/components/rankings-page"
 import { AnimeSubscriptionsPage } from "@/components/anime-subscriptions-page"
 import { LogsPage } from "@/components/logs-page"
 import { MediaDetailPage } from "@/components/media-detail-page"
-import { MediaDetailContext, type MediaDetailRecord } from "@/components/media-detail-context"
+import {
+  MediaDetailContext,
+  type MediaDetailRecord,
+} from "@/components/media-detail-context"
 import { SettingsPage } from "@/components/settings-page"
+import { ResourceSearchPage } from "@/components/resource-search-page"
 import { MediaShell } from "@/layouts/media-shell/media-shell"
 import { getCurrentUser, logout as logoutFromApi } from "@/lib/auth-api"
 import type { AuthUser } from "@/lib/auth-api"
 
 const menuTitles: Record<string, string> = {
   "/emby": "Emby 看板",
+  "/search": "搜索历史",
   "/discover/explore": "影视探索",
   "/discover/rankings": "榜单推荐",
   "/discover/anime": "动漫订阅",
@@ -26,7 +31,9 @@ const menuTitles: Record<string, string> = {
 export function App() {
   const loginRoute = window.location.pathname.replace(/\/$/, "") === "/login"
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [selectedMedia, setSelectedMedia] = useState<MediaDetailRecord | null>(null)
+  const [selectedMedia, setSelectedMedia] = useState<MediaDetailRecord | null>(
+    null
+  )
   const [activePath, setActivePath] = useState(
     menuTitles[window.location.pathname] ? window.location.pathname : "/emby"
   )
@@ -108,34 +115,46 @@ export function App() {
       <MediaShell
         user={user}
         activePath={activePath}
-        title={selectedMedia ? "作品详情" : menuTitles[activePath] ?? "Emby 看板"}
-        onNavigate={(path) => { setSelectedMedia(null); handleNavigate(path) }}
+        title={
+          selectedMedia ? "作品详情" : (menuTitles[activePath] ?? "Emby 看板")
+        }
+        onNavigate={(path) => {
+          setSelectedMedia(null)
+          handleNavigate(path)
+        }}
         onLogout={() => void handleLogout()}
       >
-      {selectedMedia ? <MediaDetailPage media={selectedMedia} onBack={() => setSelectedMedia(null)} /> : activePath === "/emby" ? (
-        <EmbyDashboard />
-      ) : activePath === "/discover/explore" ? (
-        <DiscoverExplorePage />
-      ) : activePath === "/discover/rankings" ? (
-        <RankingsPage />
-      ) : activePath === "/discover/anime" ? (
-        <AnimeSubscriptionsPage />
-      ) : activePath === "/tools/logs" ? (
-        <LogsPage />
-      ) : activePath === "/settings" ? (
-        <SettingsPage />
-      ) : (
-        <div className="flex flex-1 flex-col p-6 sm:p-8">
-          <section className="flex flex-col gap-2">
-            <h2 className="text-2xl font-semibold tracking-tight">
-              {menuTitles[activePath] ?? "Emby 看板"}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              菜单结构预览。确认栏目后，再逐项完善对应模块。
-            </p>
-          </section>
-        </div>
-      )}
+        {selectedMedia ? (
+          <MediaDetailPage
+            media={selectedMedia}
+            onBack={() => setSelectedMedia(null)}
+          />
+        ) : activePath === "/emby" ? (
+          <EmbyDashboard />
+        ) : activePath === "/discover/explore" ? (
+          <DiscoverExplorePage />
+        ) : activePath === "/discover/rankings" ? (
+          <RankingsPage />
+        ) : activePath === "/discover/anime" ? (
+          <AnimeSubscriptionsPage />
+        ) : activePath === "/tools/logs" ? (
+          <LogsPage />
+        ) : activePath === "/settings" ? (
+          <SettingsPage />
+        ) : activePath === "/search" ? (
+          <ResourceSearchPage />
+        ) : (
+          <div className="flex flex-1 flex-col p-6 sm:p-8">
+            <section className="flex flex-col gap-2">
+              <h2 className="text-2xl font-semibold tracking-tight">
+                {menuTitles[activePath] ?? "Emby 看板"}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                菜单结构预览。确认栏目后，再逐项完善对应模块。
+              </p>
+            </section>
+          </div>
+        )}
       </MediaShell>
     </MediaDetailContext.Provider>
   )

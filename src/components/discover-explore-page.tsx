@@ -33,6 +33,11 @@ import type {
   ProviderCapabilities,
 } from "@/lib/media-contract"
 import { formatResultTotal } from "@/lib/media-presentation"
+import {
+  readMediaSearchHistory,
+  saveMediaSearchHistory,
+  type MediaSearchHistoryEntry,
+} from "@/lib/resource-search"
 
 /** 来源页签标签与顺序：沿用原有页面。 */
 const sourceTabLabels: Record<string, string> = {
@@ -219,6 +224,9 @@ export function DiscoverExplorePage() {
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [queryDraft, setQueryDraft] = useState("")
   const [query, setQuery] = useState("")
+  const [searchHistory, setSearchHistory] = useState<MediaSearchHistoryEntry[]>(
+    () => readMediaSearchHistory(localStorage)
+  )
   const [page, setPage] = useState(1)
   const [revision, setRevision] = useState(0)
   const [result, setResult] = useState<DiscoverResponse | null>(null)
@@ -511,8 +519,18 @@ export function DiscoverExplorePage() {
               onSubmit={(event) => {
                 event.preventDefault()
                 if (!provider?.supportsSearch) return
+                const keyword = queryDraft.trim()
+                if (!keyword) return
+                setSearchHistory(
+                  saveMediaSearchHistory(localStorage, {
+                    kind: "media",
+                    keyword,
+                    source: provider.source,
+                    at: Date.now(),
+                  })
+                )
                 changed()
-                setQuery(queryDraft.trim())
+                setQuery(keyword)
               }}
             >
               <div className="relative min-w-0 flex-1 xl:w-56 xl:flex-none">
@@ -573,6 +591,40 @@ export function DiscoverExplorePage() {
               </Button>
             </form>
           </div>
+
+          {searchHistory.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
+              <span className="mr-1 text-xs font-medium text-muted-foreground">
+                搜索历史
+              </span>
+              {searchHistory.slice(0, 8).map((entry) => (
+                <Button
+                  key={`${entry.source}-${entry.keyword}-${entry.at}`}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const nextProvider = providers.find(
+                      (item) => item.source === entry.source && item.available
+                    )
+                    if (nextProvider && nextProvider.source !== tab) {
+                      setTab(nextProvider.source)
+                      setMediaType(nextProvider.mediaTypes[0] ?? "")
+                      setFilters({})
+                    }
+                    changed()
+                    setQueryDraft(entry.keyword)
+                    setQuery(entry.keyword)
+                  }}
+                >
+                  {entry.keyword}
+                  <span className="ml-1 text-xs text-muted-foreground">
+                    {sourceTabLabels[entry.source] ?? entry.source}
+                  </span>
+                </Button>
+              ))}
+            </div>
+          )}
 
           {provider && !peopleTab && (
             <div className="mt-3 border-t border-border/70 pt-2">

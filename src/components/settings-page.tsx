@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { CheckIcon, InfoIcon, SaveIcon, ShieldCheckIcon } from "lucide-react"
 import { changePassword, getCurrentUser, updateAccount } from "@/lib/auth-api"
 import {
@@ -29,24 +30,27 @@ import {
   type SettingValue as ApiSettingValue,
 } from "@/lib/settings-api"
 import { APIKeysPanel } from "@/components/api-keys-panel"
+import { getAccessToken } from "@/lib/auth-api"
+import { pansouDefaultChannels } from "@/lib/pansou-defaults"
 
-type SettingValue = string | boolean | number
+type SettingValue = string | boolean | number | string[]
 type Section =
   | "tmdb"
   | "emby"
   | "115"
   | "organize"
   | "search"
+  | "pansou"
   | "account"
   | "notifications"
   | "api-keys"
+type Tab = Section | "basic"
 
-const tabs: { value: Section; label: string }[] = [
-  { value: "tmdb", label: "TMDB" },
-  { value: "emby", label: "Emby" },
-  { value: "115", label: "115 网盘" },
+const tabs: { value: Tab; label: string }[] = [
+  { value: "basic", label: "基础配置" },
   { value: "organize", label: "媒体整理" },
   { value: "search", label: "搜索规则" },
+  { value: "pansou", label: "资源搜索" },
   { value: "account", label: "账号与安全" },
   { value: "api-keys", label: "API 密钥" },
   { value: "notifications", label: "通知与机器人" },
@@ -77,6 +81,10 @@ const defaults: Record<string, SettingValue> = {
   "search.minSeeders": "2",
   "search.quality": "优先 1080p，允许 2160p",
   "search.excludeKeywords": "预告, 花絮, 样片, 宣传片",
+  "pansou.channels": [],
+  "pansou.plugins": [],
+  "pansou.cloudTypes": [],
+  "pansou.detectionEnabled": false,
   "account.name": "admin",
   "account.currentPassword": "",
   "account.newPassword": "",
@@ -274,8 +282,19 @@ export function SettingsPage() {
   const [savedSections, setSavedSections] = useState<Section[]>([])
   const [configuredSecrets, setConfiguredSecrets] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  const [savingBasic, setSavingBasic] = useState(false)
   const [initialAccount, setInitialAccount] = useState("")
   const [notice, setNotice] = useState("")
+  const [resourceMeta, setResourceMeta] = useState<{
+    channels: string[]
+    plugins: { name: string }[]
+    cloudTypes: string[]
+    defaults: { channels: string[]; plugins: string[]; cloudTypes: string[] }
+  } | null>(null)
+  const [pluginFilter, setPluginFilter] = useState("")
+  const [resourceTab, setResourceTab] = useState<
+    "channels" | "plugins" | "cloudTypes" | "detection"
+  >("channels")
 
   useEffect(() => {
     let active = true
@@ -283,8 +302,9 @@ export function SettingsPage() {
       .map((tab) => tab.value)
       .filter(
         (section): section is SettingsSection =>
-          section !== "account" && section !== "api-keys"
+          section !== "basic" && section !== "account" && section !== "api-keys"
       )
+    const token = getAccessToken()
     Promise.all([
       Promise.all(
         sections.map(async (section) => ({
@@ -293,9 +313,24 @@ export function SettingsPage() {
         }))
       ),
       getCurrentUser(),
+      fetch("/api/v1/resources/meta", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }).then((response) => {
+        if (!response.ok) throw new Error("读取资源搜索选项失败")
+        return response.json()
+      }),
     ])
-      .then(([results, user]) => {
+      .then(([results, user, metaResponse]) => {
         if (!active) return
+        const meta = metaResponse.data as NonNullable<typeof resourceMeta>
+        const metaDefaults = meta.defaults ?? {
+          channels: [],
+          plugins: [],
+          cloudTypes: [],
+        }
+        const effectiveChannels =
+          meta.channels.length > 0 ? meta.channels : pansouDefaultChannels
+        setResourceMeta({ ...meta, channels: effectiveChannels })
         const persistedValues = Object.assign(
           {},
           ...results.map(({ result }) => result.values)
@@ -303,9 +338,37 @@ export function SettingsPage() {
         const supportedValues = Object.fromEntries(
           Object.entries(persistedValues).filter(([key]) => key in defaults)
         )
+        const configuredValues = {
+          "pansou.channels": metaDefaults.channels.length
+            ? metaDefaults.channels
+            : effectiveChannels,
+          "pansou.plugins": metaDefaults.plugins.length
+            ? metaDefaults.plugins
+            : meta.plugins.map((plugin) => plugin.name),
+          "pansou.cloudTypes": metaDefaults.cloudTypes.length
+            ? metaDefaults.cloudTypes
+            : meta.cloudTypes,
+        }
+        const hasVersionedResourceConfig =
+          Number(persistedValues["pansou.configVersion"] ?? 0) >= 1
+        const allResourceSelectionsEmpty = Object.keys(configuredValues).every(
+          (key) =>
+            !Array.isArray(persistedValues[key]) ||
+            (persistedValues[key] as string[]).length === 0
+        )
+        const useDefaultsForEmptySelections =
+          !hasVersionedResourceConfig || allResourceSelectionsEmpty
+        const initialResourceValues = Object.fromEntries(
+          Object.entries(configuredValues).filter(([key]) => {
+            if (!useDefaultsForEmptySelections) return !(key in persistedValues)
+            const saved = persistedValues[key]
+            return !Array.isArray(saved) || saved.length === 0
+          })
+        )
         setValues((current) => ({
           ...current,
           ...supportedValues,
+          ...initialResourceValues,
           "account.name": user.account,
         }))
         setInitialAccount(user.account)
@@ -328,7 +391,15 @@ export function SettingsPage() {
   }, [])
 
   function update(key: string, value: SettingValue) {
-    setValues((current) => ({ ...current, [key]: value }))
+    setValues((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === "pansou.channels" ||
+      key === "pansou.plugins" ||
+      key === "pansou.cloudTypes"
+        ? { "pansou.configVersion": 1 }
+        : {}),
+    }))
     setSavedSections((current) =>
       current.filter((section) => !key.startsWith(`${section}.`))
     )
@@ -399,6 +470,41 @@ export function SettingsPage() {
     )
   }
 
+  async function saveBasic() {
+    const sections = ["tmdb", "emby", "115"] as const
+    setSavingBasic(true)
+    try {
+      for (const section of sections) {
+        const sectionValues = Object.fromEntries(
+          Object.entries(values).filter(([key]) =>
+            key.startsWith(`${section}.`)
+          )
+        ) as Record<string, ApiSettingValue>
+        const result = await settingsApi.save(section, sectionValues)
+        setValues((current) => ({
+          ...current,
+          ...result.values,
+          ...Object.fromEntries(
+            result.configuredSecrets.map((key) => [key, ""])
+          ),
+        }))
+        setConfiguredSecrets((current) => [
+          ...new Set([...current, ...result.configuredSecrets]),
+        ])
+        setSavedSections((current) =>
+          current.includes(section) ? current : [...current, section]
+        )
+      }
+      setNotice("基础配置已保存。")
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "基础配置保存失败，请重试。"
+      )
+    } finally {
+      setSavingBasic(false)
+    }
+  }
+
   const stringValue = (key: string) => String(values[key] ?? "")
   const boolValue = (key: string) => Boolean(values[key])
 
@@ -436,7 +542,7 @@ export function SettingsPage() {
         </p>
       )}
 
-      <Tabs defaultValue="emby" className="w-full">
+      <Tabs defaultValue="basic" className="w-full">
         <TabsList
           variant="pill"
           aria-label="全局设置分类"
@@ -449,72 +555,362 @@ export function SettingsPage() {
           ))}
         </TabsList>
 
-        <TabsContent value="tmdb" className="pt-5"><FieldGroup><SettingInput id="tmdb-api-key" label="TMDB API Key" type="password" value={stringValue("tmdb.apiKey")} onChange={(value) => update("tmdb.apiKey", value)} placeholder={configuredSecrets.includes("tmdb.apiKey") ? "已保存；输入新值可替换" : "输入 TMDB API Key"} description="服务端加密保存；留空保留现有密钥。" /><SectionSave section="tmdb" saved={savedSections.includes("tmdb")} onSave={save} /></FieldGroup></TabsContent>
+        <TabsContent value="basic" className="pt-5">
+          <FieldGroup className="gap-6">
+            <section className="space-y-4">
+              <div className="border-b pb-2">
+                <h2 className="text-sm font-semibold">TMDB</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  影视元数据与海报来源
+                </p>
+              </div>
+              <SettingInput
+                id="tmdb-api-key"
+                label="TMDB API Key"
+                type="password"
+                value={stringValue("tmdb.apiKey")}
+                onChange={(value) => update("tmdb.apiKey", value)}
+                placeholder={
+                  configuredSecrets.includes("tmdb.apiKey")
+                    ? "已保存；输入新值可替换"
+                    : "输入 TMDB API Key"
+                }
+                description="服务端加密保存；留空保留现有密钥。"
+              />
+            </section>
 
-        <TabsContent value="emby" className="pt-5">
-          <FieldGroup className="gap-4">
-            <SettingInput
-              id="emby-url"
-              label="Emby 地址"
-              placeholder="http://emby.local:8096"
-              value={stringValue("emby.url")}
-              onChange={(value) => update("emby.url", value)}
-              description="填写服务器根地址，包含协议和端口。"
-            />
-            <SettingInput
-              id="emby-api-key"
-              label="API Key"
-              type="password"
-              placeholder={
-                configuredSecrets.includes("emby.apiKey")
-                  ? "已保存；输入新值可替换"
-                  : "输入 Emby API Key"
-              }
-              value={stringValue("emby.apiKey")}
-              onChange={(value) => update("emby.apiKey", value)}
-              description="在 Emby 控制台的 API 密钥页面创建。保存后由服务端加密保管；留空不会覆盖已保存的密钥。"
-            />
-            <SettingInput
-              id="emby-cache-expiration-hours"
-              label="缓存失效时间"
-              type="number"
-              value={stringValue("emby.cacheExpirationHours")}
-              onChange={(value) => update("emby.cacheExpirationHours", Math.max(1, Number(value) || 1))}
-              description="单位为小时，默认 12 小时。打开 Emby 看板时，缓存超过此时间才会重新读取服务器数据。"
-            />
-            <SectionSave
-              section="emby"
-              saved={savedSections.includes("emby")}
-              onSave={save}
-            />
+            <section className="space-y-4">
+              <div className="border-b pb-2">
+                <h2 className="text-sm font-semibold">Emby</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  媒体服务器连接与看板缓存
+                </p>
+              </div>
+              <FieldGroup className="gap-4">
+                <SettingInput
+                  id="emby-url"
+                  label="Emby 地址"
+                  placeholder="http://emby.local:8096"
+                  value={stringValue("emby.url")}
+                  onChange={(value) => update("emby.url", value)}
+                  description="填写服务器根地址，包含协议和端口。"
+                />
+                <SettingInput
+                  id="emby-api-key"
+                  label="API Key"
+                  type="password"
+                  placeholder={
+                    configuredSecrets.includes("emby.apiKey")
+                      ? "已保存；输入新值可替换"
+                      : "输入 Emby API Key"
+                  }
+                  value={stringValue("emby.apiKey")}
+                  onChange={(value) => update("emby.apiKey", value)}
+                  description="在 Emby 控制台的 API 密钥页面创建。保存后由服务端加密保管；留空不会覆盖已保存的密钥。"
+                />
+                <SettingInput
+                  id="emby-cache-expiration-hours"
+                  label="缓存失效时间"
+                  type="number"
+                  value={stringValue("emby.cacheExpirationHours")}
+                  onChange={(value) =>
+                    update(
+                      "emby.cacheExpirationHours",
+                      Math.max(1, Number(value) || 1)
+                    )
+                  }
+                  description="单位为小时，默认 12 小时。打开 Emby 看板时，缓存超过此时间才会重新读取服务器数据。"
+                />
+              </FieldGroup>
+            </section>
+
+            <section className="space-y-4">
+              <div className="border-b pb-2">
+                <h2 className="text-sm font-semibold">115 网盘</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  网盘授权与下载目录
+                </p>
+              </div>
+              <FieldGroup className="gap-4">
+                <SettingTextarea
+                  id="115-cookie"
+                  label="115 Cookie"
+                  placeholder={
+                    configuredSecrets.includes("115.cookie")
+                      ? "已保存；粘贴新 Cookie 可替换"
+                      : "粘贴 115 登录 Cookie"
+                  }
+                  value={stringValue("115.cookie")}
+                  onChange={(value) => update("115.cookie", value)}
+                  description="Cookie 等同登录凭证；由服务端加密保管，留空不会覆盖已保存值。"
+                />
+                <SettingInput
+                  id="115-download-directory"
+                  label="下载目录"
+                  placeholder="例如 /影视下载"
+                  value={stringValue("115.downloadDirectory")}
+                  onChange={(value) => update("115.downloadDirectory", value)}
+                  description="填写 115 网盘中的目标目录。"
+                />
+              </FieldGroup>
+            </section>
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <Button
+                type="button"
+                disabled={savingBasic}
+                onClick={() => void saveBasic()}
+              >
+                <SaveIcon data-icon="inline-start" />
+                {savingBasic ? "正在保存…" : "保存基础配置"}
+              </Button>
+              {(["tmdb", "emby", "115"] as const).every((section) =>
+                savedSections.includes(section)
+              ) && (
+                <span
+                  role="status"
+                  className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"
+                >
+                  <CheckIcon data-icon="inline-start" />
+                  已保存
+                </span>
+              )}
+            </div>
           </FieldGroup>
         </TabsContent>
 
-        <TabsContent value="115" className="pt-5">
-          <FieldGroup className="gap-4">
-            <SettingTextarea
-              id="115-cookie"
-              label="115 Cookie"
-              placeholder={
-                configuredSecrets.includes("115.cookie")
-                  ? "已保存；粘贴新 Cookie 可替换"
-                  : "粘贴 115 登录 Cookie"
-              }
-              value={stringValue("115.cookie")}
-              onChange={(value) => update("115.cookie", value)}
-              description="Cookie 等同登录凭证；由服务端加密保管，留空不会覆盖已保存值。"
-            />
-            <SettingInput
-              id="115-download-directory"
-              label="下载目录"
-              placeholder="例如 /影视下载"
-              value={stringValue("115.downloadDirectory")}
-              onChange={(value) => update("115.downloadDirectory", value)}
-              description="填写 115 网盘中的目标目录。"
-            />
+        <TabsContent value="pansou" className="pt-5">
+          <FieldGroup className="gap-5">
+            <div
+              className="flex flex-wrap gap-2 border-b pb-3"
+              role="tablist"
+              aria-label="资源搜索配置"
+            >
+              {(
+                [
+                  ["channels", "TG 频道", resourceMeta?.channels.length ?? 0],
+                  ["plugins", "搜索插件", resourceMeta?.plugins.length ?? 0],
+                  [
+                    "cloudTypes",
+                    "网盘类型",
+                    resourceMeta?.cloudTypes.length ?? 0,
+                  ],
+                  ["detection", "检测", null],
+                ] as [typeof resourceTab, string, number | null][]
+              ).map(([tab, label, count]) => (
+                <Button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  aria-selected={resourceTab === tab}
+                  variant={resourceTab === tab ? "default" : "outline"}
+                  onClick={() => setResourceTab(tab)}
+                >
+                  {label}
+                  {count === null ? "" : ` · ${count}`}
+                </Button>
+              ))}
+            </div>
+
+            {resourceTab === "channels" &&
+              (() => {
+                const key = "pansou.channels"
+                const options = resourceMeta?.channels ?? []
+                const selected = Array.isArray(values[key])
+                  ? (values[key] as string[])
+                  : []
+                return (
+                  <SettingField id={key} label="TG 频道">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-muted-foreground">
+                          已选 {selected.length} / {options.length}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            update(
+                              key,
+                              selected.length === options.length ? [] : options
+                            )
+                          }
+                        >
+                          {selected.length === options.length
+                            ? "取消全选"
+                            : "全选"}
+                        </Button>
+                      </div>
+                      <ToggleGroup
+                        multiple
+                        value={selected}
+                        onValueChange={(next) => update(key, next)}
+                        className="flex-wrap justify-start"
+                      >
+                        {options.map((option) => (
+                          <ToggleGroupItem
+                            key={option}
+                            value={option}
+                            size="sm"
+                          >
+                            {option}
+                          </ToggleGroupItem>
+                        ))}
+                      </ToggleGroup>
+                    </div>
+                  </SettingField>
+                )
+              })()}
+
+            {resourceTab === "plugins" &&
+              (() => {
+                const key = "pansou.plugins"
+                const options =
+                  resourceMeta?.plugins.map((plugin) => plugin.name) ?? []
+                const selected = Array.isArray(values[key])
+                  ? (values[key] as string[])
+                  : []
+                return (
+                  <SettingField id={key} label="搜索插件">
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="mr-auto text-sm text-muted-foreground">
+                          已选 {selected.length} / {options.length}
+                        </span>
+                        <Input
+                          aria-label="筛选搜索插件"
+                          placeholder="筛选插件名称"
+                          value={pluginFilter}
+                          onChange={(event) =>
+                            setPluginFilter(event.target.value)
+                          }
+                          className="max-w-xs"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => update(key, options)}
+                        >
+                          全选
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => update(key, [])}
+                        >
+                          清空
+                        </Button>
+                      </div>
+                      <ToggleGroup
+                        multiple
+                        value={selected}
+                        onValueChange={(next) => update(key, next)}
+                        className="flex-wrap justify-start"
+                      >
+                        {options
+                          .filter((option) =>
+                            option
+                              .toLowerCase()
+                              .includes(pluginFilter.toLowerCase())
+                          )
+                          .map((option) => (
+                            <ToggleGroupItem
+                              key={option}
+                              value={option}
+                              size="sm"
+                            >
+                              {option}
+                            </ToggleGroupItem>
+                          ))}
+                      </ToggleGroup>
+                    </div>
+                  </SettingField>
+                )
+              })()}
+
+            {resourceTab === "cloudTypes" &&
+              (() => {
+                const key = "pansou.cloudTypes"
+                const options = resourceMeta?.cloudTypes ?? []
+                const selected = Array.isArray(values[key])
+                  ? (values[key] as string[])
+                  : []
+                const labels: Record<string, string> = {
+                  baidu: "百度",
+                  aliyun: "阿里",
+                  115: "115",
+                  123: "123",
+                  xunlei: "迅雷",
+                  quark: "夸克",
+                  guangya: "光鸭",
+                  mobile: "移动",
+                  tianyi: "天翼",
+                  uc: "UC",
+                  pikpak: "PikPak",
+                  ed2k: "电驴",
+                  magnet: "磁力",
+                  other: "其他",
+                }
+                return (
+                  <SettingField id={key} label="网盘类型">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-muted-foreground">
+                          已选 {selected.length} / {options.length}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            update(
+                              key,
+                              selected.length === options.length ? [] : options
+                            )
+                          }
+                        >
+                          {selected.length === options.length
+                            ? "取消全选"
+                            : "全选"}
+                        </Button>
+                      </div>
+                      <ToggleGroup
+                        multiple
+                        value={selected}
+                        onValueChange={(next) => update(key, next)}
+                        className="flex-wrap justify-start"
+                      >
+                        {options.map((option) => (
+                          <ToggleGroupItem
+                            key={option}
+                            value={option}
+                            size="sm"
+                          >
+                            {labels[option] ?? option}
+                          </ToggleGroupItem>
+                        ))}
+                      </ToggleGroup>
+                    </div>
+                  </SettingField>
+                )
+              })()}
+
+            {resourceTab === "detection" && (
+              <SettingSwitch
+                id="pansou.detectionEnabled"
+                label="自动检测当前可见链接"
+                checked={boolValue("pansou.detectionEnabled")}
+                onChange={(checked) =>
+                  update("pansou.detectionEnabled", checked)
+                }
+                description="此设置会保存到服务端；自动检测功能尚未接入。"
+              />
+            )}
             <SectionSave
-              section="115"
-              saved={savedSections.includes("115")}
+              section="pansou"
+              saved={savedSections.includes("pansou")}
               onSave={save}
             />
           </FieldGroup>

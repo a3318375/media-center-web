@@ -3,6 +3,7 @@ import {
   ClapperboardIcon,
   CompassIcon,
   LayoutDashboardIcon,
+  SearchIcon,
   ScrollTextIcon,
   SlidersHorizontalIcon,
   TrophyIcon,
@@ -25,6 +26,7 @@ export const navigationSections: NavigationSection[] = [
     title: "首页",
     links: [
       { title: "Emby 看板", path: "/emby", icon: LayoutDashboardIcon },
+      { title: "搜索历史", path: "/search", icon: SearchIcon },
     ],
   },
   {
@@ -48,6 +50,7 @@ export const navigationSections: NavigationSection[] = [
 
 export const searchableNavigation = [
   ...navigationSections.flatMap((section) => [
-    ...(section.links?.map((link) => ({ ...link, section: section.title })) ?? []),
+    ...(section.links?.map((link) => ({ ...link, section: section.title })) ??
+      []),
   ]),
 ]
