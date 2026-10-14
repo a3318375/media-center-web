@@ -121,7 +121,13 @@ export function AddAnimeSubscription({
     setSelected(null)
     setGroups([])
     await run(async (signal) => {
-      const result = await animeApi.catalog(query, season, refresh, signal)
+      const result = await animeApi.catalog(
+        query,
+        season,
+        refresh,
+        signal,
+        draft.source
+      )
       setItems(result.items)
       if (result.seasons.length) setSeasons([...new Set(result.seasons)])
     })
@@ -130,7 +136,7 @@ export function AddAnimeSubscription({
     setSelected(item)
     setGroups([])
     await run(async (signal) =>
-      setGroups(await animeApi.groups(item.id, signal))
+      setGroups(await animeApi.groups(item.id, signal, draft.source))
     )
   }
   function close(value: boolean) {
@@ -164,7 +170,8 @@ export function AddAnimeSubscription({
         <DialogHeader>
           <DialogTitle>添加动漫订阅</DialogTitle>
           <DialogDescription>
-            选择单番剧 RSS，确认作品和规则后保存。下载与 115 整理尚未接入。
+            选择单番剧
+            RSS，确认作品和规则后保存。保存后可单独启用下载范围，文件由公共整理规则归档。
           </DialogDescription>
         </DialogHeader>
         {error && (
@@ -177,12 +184,26 @@ export function AddAnimeSubscription({
             <Tabs
               value={draft.source}
               onValueChange={(value) => {
-                if (value === "mikan" || value === "other")
-                  change("source", value)
+                if (
+                  value === "mikan" ||
+                  value === "other" ||
+                  value === "ani-bt" ||
+                  value === "anime-garden"
+                ) {
+                  controller.current?.abort()
+                  setDraft({ ...emptyAnimeDraft(), source: value })
+                  setPreview(null)
+                  setSeasons([])
+                  setSeason("")
+                  setItems([])
+                  setGroups([])
+                }
               }}
             >
               <TabsList>
                 <TabsTrigger value="mikan">Mikan</TabsTrigger>
+                <TabsTrigger value="ani-bt">AniBT</TabsTrigger>
+                <TabsTrigger value="anime-garden">AnimeGarden</TabsTrigger>
                 <TabsTrigger value="other">其他 RSS</TabsTrigger>
               </TabsList>
             </Tabs>
@@ -196,7 +217,11 @@ export function AddAnimeSubscription({
                   placeholder={
                     draft.source === "mikan"
                       ? "https://mikanani.me/RSS/Bangumi?bangumiId=…&subgroupid=…"
-                      : "https://example.com/anime.xml"
+                      : draft.source === "ani-bt"
+                        ? "https://anibt.net/rss/anime.xml?bgmId=…&groupSlug=…"
+                        : draft.source === "anime-garden"
+                          ? "https://api.animes.garden/feed.xml?subject=…&fansub=…"
+                          : "https://example.com/anime.xml"
                   }
                   disabled={busy}
                 />
@@ -218,14 +243,19 @@ export function AddAnimeSubscription({
               )}
             </FieldGroup>
             <DialogFooter>
-              {draft.source === "mikan" && (
+              {draft.source !== "other" && (
                 <Button
                   variant="outline"
                   disabled={busy}
                   onClick={() => void browse()}
                 >
                   <SearchIcon data-icon="inline-start" />
-                  浏览 Mikan
+                  浏览{" "}
+                  {draft.source === "mikan"
+                    ? "Mikan"
+                    : draft.source === "ani-bt"
+                      ? "AniBT"
+                      : "AnimeGarden"}
                 </Button>
               )}
               <Button
@@ -458,11 +488,12 @@ export function AddAnimeSubscription({
                 onClick={() =>
                   void resolve({
                     ...draft,
-                    source: "mikan",
+                    source: draft.source,
                     url: selectedGroup.url,
                     bangumiId: selectedGroup.bangumiId,
                     subgroup: selectedGroup.label,
-                    mikanId: selected?.id ?? "",
+                    mikanId:
+                      draft.source === "mikan" ? (selected?.id ?? "") : "",
                     week:
                       [
                         "星期一",

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import {
   CheckIcon,
   Clock3Icon,
+  DownloadIcon,
   PauseIcon,
   PlayIcon,
   RotateCwIcon,
@@ -17,6 +18,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { animeApi, presentAnime, type AnimeSubscription } from "@/lib/anime-api"
 import { AddAnimeSubscription } from "@/components/add-anime-subscription"
+import { AnimeDownloadDialog } from "@/components/anime-download-dialog"
 import { useMediaDetail } from "@/components/media-detail-context"
 
 const weekdays = [
@@ -35,12 +37,14 @@ function AnimeCard({
   onOpen,
   onToggleStatus,
   onRefresh,
+  onDownloads,
   refreshing,
 }: {
   anime: AnimeSubscription
   onOpen: (anime: AnimeSubscription) => void
   onToggleStatus: (anime: AnimeSubscription) => void
   onRefresh: (anime: AnimeSubscription) => void
+  onDownloads: (anime: AnimeSubscription) => void
   refreshing: boolean
 }) {
   const isUpdating = anime.status === "更新中"
@@ -145,6 +149,16 @@ function AnimeCard({
             ))}
           </div>
           <div className="ml-auto flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={!anime.saved}
+              onClick={() => onDownloads(anime)}
+              aria-label={`设置《${anime.title}》下载`}
+              title="设置下载范围和目标目录"
+            >
+              <DownloadIcon data-icon="inline-start" />
+            </Button>
             {anime.status !== "已完结" && (
               <Button
                 variant="ghost"
@@ -203,6 +217,9 @@ export function AnimeSubscriptionsPage() {
     () => new Set()
   )
   const [adding, setAdding] = useState(false)
+  const [downloadAnime, setDownloadAnime] = useState<AnimeSubscription | null>(
+    null
+  )
   const openMediaDetail = useMediaDetail()
 
   useEffect(() => {
@@ -267,7 +284,9 @@ export function AnimeSubscriptionsPage() {
       setNotice(error instanceof Error ? error.message : "订阅刷新失败")
       // Fetch persisted last-error fields while preserving prior resources.
       try {
-        const saved = (await animeApi.list()).find((item) => item.id === anime.id)
+        const saved = (await animeApi.list()).find(
+          (item) => item.id === anime.id
+        )
         if (saved) {
           const updated = presentAnime(saved)
           setSubscriptions((current) =>
@@ -349,6 +368,13 @@ export function AnimeSubscriptionsPage() {
         onOpenChange={setAdding}
         onCreated={refresh}
       />
+      {downloadAnime && (
+        <AnimeDownloadDialog
+          key={downloadAnime.id}
+          anime={downloadAnime}
+          onClose={() => setDownloadAnime(null)}
+        />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <p className="text-sm text-muted-foreground">
           管理番剧 RSS 与匹配规则。
@@ -476,6 +502,7 @@ export function AnimeSubscriptionsPage() {
               onOpen={openAnime}
               onToggleStatus={toggleStatus}
               onRefresh={(anime) => void refreshSubscription(anime)}
+              onDownloads={setDownloadAnime}
               refreshing={refreshingIds.has(anime.id)}
             />
           ))}

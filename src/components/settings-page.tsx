@@ -997,68 +997,19 @@ export function SettingsPage() {
 
         <TabsContent value="organize" className="pt-5">
           <FieldGroup className="gap-4">
-            <SettingSwitch
-              id="organize-enabled"
-              label="启用自动整理"
-              description="下载完成后按媒体类型归档并规范命名。"
-              checked={boolValue("organize.enabled")}
-              onChange={(value) => update("organize.enabled", value)}
-            />
-            <SettingTextarea
-              id="organize-source-paths"
-              label="待整理目录"
-              placeholder="每行填写一个下载目录"
-              value={stringValue("organize.sourcePaths")}
-              onChange={(value) => update("organize.sourcePaths", value)}
-              description="可填写多个目录；请确保应用具有读写权限。"
-            />
-            <SettingInput
-              id="organize-movie-path"
-              label="电影目标目录"
-              placeholder="/media/movies"
-              value={stringValue("organize.moviePath")}
-              onChange={(value) => update("organize.moviePath", value)}
-            />
-            <SettingInput
-              id="organize-tv-path"
-              label="剧集目标目录"
-              placeholder="/media/tv"
-              value={stringValue("organize.tvPath")}
-              onChange={(value) => update("organize.tvPath", value)}
-            />
-            <SettingInput
-              id="organize-movie-format"
-              label="电影命名规则"
-              value={stringValue("organize.movieFormat")}
-              onChange={(value) => update("organize.movieFormat", value)}
-              description="可用变量：{title}、{year}、{quality}。"
-            />
-            <SettingInput
-              id="organize-tv-format"
-              label="剧集命名规则"
-              value={stringValue("organize.tvFormat")}
-              onChange={(value) => update("organize.tvFormat", value)}
-              description="可用变量：{title}、{year}、{season}、{episode}。"
-            />
-            <SettingSelect
-              id="organize-mode"
-              label="整理方式"
-              value={stringValue("organize.moveMode")}
-              options={["硬链接，失败时复制", "复制", "移动"]}
-              onChange={(value) => update("organize.moveMode", value)}
-              description="硬链接适合下载目录和媒体库位于同一文件系统的情况。"
-            />
-            <SettingSwitch
-              id="organize-skip-existing"
-              label="跳过已存在文件"
-              checked={boolValue("organize.skipExisting")}
-              onChange={(value) => update("organize.skipExisting", value)}
-            />
-            <SectionSave
-              section="organize"
-              saved={savedSections.includes("organize")}
-              onSave={save}
-            />
+            <FieldDescription>
+              在“影视整理”中配置 115
+              未整理目录、分类目标目录和每天运行时间。规则默认关闭，可先预览；历史文件需确认下载完成。旧版路径设置仍保留在数据库中。
+            </FieldDescription>
+            <Button
+              className="self-start"
+              onClick={() => {
+                window.history.pushState(null, "", "/tools/organize")
+                window.dispatchEvent(new PopStateEvent("popstate"))
+              }}
+            >
+              打开影视整理
+            </Button>
           </FieldGroup>
         </TabsContent>
 

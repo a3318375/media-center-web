@@ -5,6 +5,8 @@ import { DiscoverExplorePage } from "@/components/discover-explore-page"
 import { RankingsPage } from "@/components/rankings-page"
 import { AnimeSubscriptionsPage } from "@/components/anime-subscriptions-page"
 import { LogsPage } from "@/components/logs-page"
+import { DownloadsPage } from "@/components/downloads-page"
+import { OrganizePage } from "@/components/organize-page"
 import { MediaDetailPage } from "@/components/media-detail-page"
 import {
   MediaDetailContext,
@@ -15,6 +17,10 @@ import { ResourceSearchPage } from "@/components/resource-search-page"
 import { MediaShell } from "@/layouts/media-shell/media-shell"
 import { getCurrentUser, logout as logoutFromApi } from "@/lib/auth-api"
 import { prepareResourceSearch } from "@/lib/resource-search"
+import {
+  mediaContextFromRecord,
+  type DownloadMediaContext,
+} from "@/lib/download-api"
 import type { AuthUser } from "@/lib/auth-api"
 
 const menuTitles: Record<string, string> = {
@@ -25,6 +31,7 @@ const menuTitles: Record<string, string> = {
   "/discover/anime": "动漫订阅",
   "/discover/calendar": "追剧日历",
   "/tools/organize": "影视整理",
+  "/tools/downloads": "下载任务",
   "/tools/logs": "日志中心",
   "/settings": "全局设置",
 }
@@ -41,6 +48,7 @@ export function App() {
   const [resourceSearchRequest, setResourceSearchRequest] = useState<{
     id: number
     keyword: string
+    media?: DownloadMediaContext
   } | null>(null)
   const [searchReturnToExplore, setSearchReturnToExplore] = useState(false)
   const resourceSearchRequestId = useRef(0)
@@ -109,12 +117,17 @@ export function App() {
     setSearchReturnToExplore(false)
   }
 
-  function handleResourceSearch(keyword: string, fromExplore = false) {
+  function handleResourceSearch(
+    keyword: string,
+    fromExplore = false,
+    media?: DownloadMediaContext
+  ) {
     prepareResourceSearch(sessionStorage)
     resourceSearchRequestId.current += 1
     setResourceSearchRequest({
       id: resourceSearchRequestId.current,
       keyword,
+      media,
     })
     setSelectedMedia(null)
     handleNavigate("/search")
@@ -161,18 +174,34 @@ export function App() {
           <MediaDetailPage
             media={selectedMedia}
             onBack={() => setSelectedMedia(null)}
-            onResourceSearch={(keyword) => handleResourceSearch(keyword)}
+            onResourceSearch={(keyword) =>
+              handleResourceSearch(
+                keyword,
+                false,
+                mediaContextFromRecord(selectedMedia)
+              )
+            }
           />
         ) : activePath === "/emby" ? (
           <EmbyDashboard />
         ) : activePath === "/discover/explore" ? (
-          <DiscoverExplorePage onResourceSearch={(keyword) => handleResourceSearch(keyword, true)} />
+          <DiscoverExplorePage
+            onResourceSearch={(keyword, media) =>
+              handleResourceSearch(keyword, true, media)
+            }
+          />
         ) : activePath === "/discover/rankings" ? (
-          <RankingsPage onResourceSearch={(keyword) => handleResourceSearch(keyword)} />
+          <RankingsPage
+            onResourceSearch={(keyword) => handleResourceSearch(keyword)}
+          />
         ) : activePath === "/discover/anime" ? (
           <AnimeSubscriptionsPage />
         ) : activePath === "/tools/logs" ? (
           <LogsPage />
+        ) : activePath === "/tools/downloads" ? (
+          <DownloadsPage />
+        ) : activePath === "/tools/organize" ? (
+          <OrganizePage />
         ) : activePath === "/settings" ? (
           <SettingsPage />
         ) : activePath === "/search" ? null : (

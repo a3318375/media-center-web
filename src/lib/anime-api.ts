@@ -6,7 +6,7 @@ export type AnimeDraft = {
   originalTitle: string
   bangumiId: string
   mikanId: string
-  source: "mikan" | "other"
+  source: "mikan" | "ani-bt" | "anime-garden" | "other"
   url: string
   subgroup: string
   season: number
@@ -134,21 +134,29 @@ export const animeApi = {
     query: string,
     season: string,
     refresh: boolean,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    source: AnimeDraft["source"] = "mikan"
   ) => {
     const [year, quarter] = season.split(" ")
     const params = new URLSearchParams({
       query,
       refresh: String(refresh),
-      ...(season ? { year, season: quarter } : {}),
+      ...(season
+        ? source === "mikan"
+          ? { year, season: quarter }
+          : { season }
+        : {}),
     })
     return request<{ items: MikanItem[]; seasons: string[] }>(
-      `anime/sources/mikan/catalog?${params}`,
+      `anime/sources/${source}/catalog?${params}`,
       signal
     )
   },
-  groups: (id: string, signal?: AbortSignal) =>
-    request<MikanGroup[]>(`anime/sources/mikan/${id}/groups`, signal),
+  groups: (
+    id: string,
+    signal?: AbortSignal,
+    source: AnimeDraft["source"] = "mikan"
+  ) => request<MikanGroup[]>(`anime/sources/${source}/${id}/groups`, signal),
 }
 
 // Stable presentation contract shared by real subscriptions and optional demo data.
@@ -194,13 +202,11 @@ export function presentAnime(saved: SavedAnimeSubscription): AnimeSubscription {
     description: saved.description,
     palette: "from-slate-700 via-slate-900 to-slate-950",
     artwork: saved.title,
-    recentEpisodes: (saved.resources ?? [])
-      .slice(0, 5)
-      .map((item) => ({
-        episode: `第 ${item.episode} 集`,
-        title: item.title,
-        updatedAt: item.publishedAt,
-      })),
+    recentEpisodes: (saved.resources ?? []).slice(0, 5).map((item) => ({
+      episode: `第 ${item.episode} 集`,
+      title: item.title,
+      updatedAt: item.publishedAt,
+    })),
     saved,
   }
 }

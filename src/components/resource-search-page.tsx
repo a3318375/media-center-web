@@ -8,6 +8,11 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { getAccessToken } from "@/lib/auth-api"
 import {
+  ResourceDownloadDialog,
+  type DownloadSource,
+} from "@/components/resource-download-dialog"
+import { is115ShareURL, type DownloadMediaContext } from "@/lib/download-api"
+import {
   resourceSearchPlan,
   safeResourceURL,
   RESOURCE_SEARCH_CONFIG_CHANGED,
@@ -113,6 +118,7 @@ type SavedSearchResult = {
   config: SearchConfig
   result: Result
   tab: string
+  media?: DownloadMediaContext
 }
 
 function readSavedSearchResult(storage: Storage): SavedSearchResult | null {
@@ -175,7 +181,11 @@ export function ResourceSearchPage({
   showExploreBack,
   onBackToExplore,
 }: {
-  searchRequest: { id: number; keyword: string } | null
+  searchRequest: {
+    id: number
+    keyword: string
+    media?: DownloadMediaContext
+  } | null
   onSearchRequestHandled: (id: number) => void
   showExploreBack: boolean
   onBackToExplore: () => void
@@ -203,6 +213,13 @@ export function ResourceSearchPage({
     [tab, setTab] = useState(savedSearch?.tab ?? ""),
     [copyMessage, setCopyMessage] = useState("")
   const [linkHealth, setLinkHealth] = useState<Record<string, LinkHealth>>({})
+  const [downloadSource, setDownloadSource] = useState<DownloadSource | null>(
+    null
+  )
+  const mediaContext = useRef<{
+    keyword: string
+    media?: DownloadMediaContext
+  }>({ keyword: savedSearch?.config.keyword ?? "", media: savedSearch?.media })
   const linkHealthCache = useRef<Record<string, LinkHealth>>({})
   const timers = useRef<number[]>([]),
     runId = useRef(0),
@@ -245,6 +262,8 @@ export function ResourceSearchPage({
     async (config?: SearchConfig) => {
       const keyword = (config?.keyword ?? query).trim()
       if (!keyword) return
+      if (keyword !== mediaContext.current.keyword)
+        mediaContext.current = { keyword }
       timers.current.forEach(clearTimeout)
       timers.current = []
       requestController.current?.abort()
@@ -399,6 +418,10 @@ export function ResourceSearchPage({
   }, [search])
   useEffect(() => {
     if (!searchRequest || !meta) return
+    mediaContext.current = {
+      keyword: searchRequest.keyword,
+      media: searchRequest.media,
+    }
     searchRef.current({
       keyword: searchRequest.keyword,
       source: "all",
@@ -420,6 +443,7 @@ export function ResourceSearchPage({
           config: lastConfig,
           result,
           tab,
+          media: mediaContext.current.media,
         } satisfies SavedSearchResult)
       )
     } catch {
@@ -522,6 +546,16 @@ export function ResourceSearchPage({
   }
   return (
     <main className="flex flex-1 flex-col gap-4 p-4 sm:p-6 lg:p-8">
+      {downloadSource && (
+        <ResourceDownloadDialog
+          key={downloadSource.url}
+          source={downloadSource}
+          onClose={() => setDownloadSource(null)}
+          onCreated={() =>
+            setCopyMessage("已加入下载队列，可在下载任务中查看。")
+          }
+        />
+      )}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
@@ -668,6 +702,32 @@ export function ResourceSearchPage({
                           {link.url}
                         </a>
                         <div className="mt-2 flex gap-2">
+                          {(/^magnet:/i.test(link.url) ||
+                            is115ShareURL(link.url)) && (
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                setDownloadSource({
+                                  url: link.url,
+                                  password: link.password,
+                                  title:
+                                    result.items.find((item) =>
+                                      item.links?.some(
+                                        (x) => x.url === link.url
+                                      )
+                                    )?.title ??
+                                    lastConfig?.keyword ??
+                                    link.note ??
+                                    "资源",
+                                  media: mediaContext.current.media,
+                                })
+                              }
+                            >
+                              {is115ShareURL(link.url)
+                                ? "转存到 115"
+                                : "115 离线下载"}
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"

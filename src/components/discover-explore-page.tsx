@@ -34,6 +34,10 @@ import type {
 } from "@/lib/media-contract"
 import { formatResultTotal } from "@/lib/media-presentation"
 import {
+  mediaContextFromRecord,
+  type DownloadMediaContext,
+} from "@/lib/download-api"
+import {
   readMediaSearchHistory,
   saveMediaSearchHistory,
   type MediaSearchHistoryEntry,
@@ -220,7 +224,7 @@ function FilterRow({
 export function DiscoverExplorePage({
   onResourceSearch,
 }: {
-  onResourceSearch: (keyword: string) => void
+  onResourceSearch: (keyword: string, media?: DownloadMediaContext) => void
 }) {
   const [providers, setProviders] = useState<ProviderCapabilities[]>([])
   const [tab, setTab] = useState("tmdb")
@@ -782,7 +786,9 @@ export function DiscoverExplorePage({
                   item={item}
                   sourceLabel={sourceTabLabels[item.provider] ?? item.provider}
                   onOpen={() => void open(item)}
-                  onResourceSearch={onResourceSearch}
+                  onResourceSearch={(keyword) =>
+                    onResourceSearch(keyword, mediaContextFromRecord(item))
+                  }
                   className="w-full sm:w-full"
                 />
               ))}
