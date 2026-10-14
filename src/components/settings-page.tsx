@@ -29,6 +29,7 @@ import {
   type SettingsSection,
   type SettingValue as ApiSettingValue,
 } from "@/lib/settings-api"
+import { SecretSetting } from "@/components/secret-setting"
 import { APIKeysPanel } from "@/components/api-keys-panel"
 import { getAccessToken } from "@/lib/auth-api"
 import {
@@ -286,6 +287,10 @@ export function SettingsPage() {
   })
   const [savedSections, setSavedSections] = useState<Section[]>([])
   const [configuredSecrets, setConfiguredSecrets] = useState<string[]>([])
+  const [maskedSecrets, setMaskedSecrets] = useState<Record<string, string>>({})
+  const [secretRevisions, setSecretRevisions] = useState<
+    Record<string, number>
+  >({})
   const [loading, setLoading] = useState(true)
   const [savingBasic, setSavingBasic] = useState(false)
   const [initialAccount, setInitialAccount] = useState("")
@@ -301,12 +306,19 @@ export function SettingsPage() {
 
   useEffect(() => {
     let active = true
-    const sections = tabs
-      .map((tab) => tab.value)
-      .filter(
-        (section): section is SettingsSection =>
-          section !== "basic" && section !== "account" && section !== "api-keys"
-      )
+    const sections: SettingsSection[] = [
+      "tmdb",
+      "emby",
+      "115",
+      ...tabs
+        .map((tab) => tab.value)
+        .filter(
+          (section): section is SettingsSection =>
+            section !== "basic" &&
+            section !== "account" &&
+            section !== "api-keys"
+        ),
+    ]
     const token = getAccessToken()
     Promise.all([
       Promise.all(
@@ -348,6 +360,12 @@ export function SettingsPage() {
           ...initialResourceValues,
           "account.name": user.account,
         }))
+        setMaskedSecrets(
+          Object.assign(
+            {},
+            ...results.map(({ result }) => result.maskedSecrets ?? {})
+          )
+        )
         setInitialAccount(user.account)
         setConfiguredSecrets(
           results.flatMap(({ result }) => result.configuredSecrets)
@@ -433,6 +451,11 @@ export function SettingsPage() {
             result.configuredSecrets.map((key) => [key, ""])
           ),
         }))
+        setMaskedSecrets((current) => ({ ...current, ...result.maskedSecrets }))
+        setSecretRevisions((current) => ({
+          ...current,
+          [section]: (current[section] ?? 0) + 1,
+        }))
         setConfiguredSecrets((current) => [
           ...new Set([...current, ...result.configuredSecrets]),
         ])
@@ -464,6 +487,11 @@ export function SettingsPage() {
           ...Object.fromEntries(
             result.configuredSecrets.map((key) => [key, ""])
           ),
+        }))
+        setMaskedSecrets((current) => ({ ...current, ...result.maskedSecrets }))
+        setSecretRevisions((current) => ({
+          ...current,
+          [section]: (current[section] ?? 0) + 1,
         }))
         setConfiguredSecrets((current) => [
           ...new Set([...current, ...result.configuredSecrets]),
@@ -504,7 +532,7 @@ export function SettingsPage() {
         <InfoIcon />
         <AlertDescription>
           设置会保存在服务端 SQLite 数据库。API Key、115 Cookie
-          和机器人令牌在数据库中加密，读取页面时不会把密钥明文返回。
+          和机器人令牌在数据库中加密，默认显示头尾部分，点击“显示全文”即可查看完整值。
         </AlertDescription>
       </Alert>
 
@@ -541,18 +569,20 @@ export function SettingsPage() {
                   影视元数据与海报来源
                 </p>
               </div>
-              <SettingInput
+              <SecretSetting
                 id="tmdb-api-key"
                 label="TMDB API Key"
-                type="password"
+                section="tmdb"
+                secretKey="tmdb.apiKey"
+                key={`tmdb.apiKey:${secretRevisions["tmdb"] ?? 0}`}
+                configured={configuredSecrets.includes("tmdb.apiKey")}
+                masked={maskedSecrets["tmdb.apiKey"]}
                 value={stringValue("tmdb.apiKey")}
                 onChange={(value) => update("tmdb.apiKey", value)}
-                placeholder={
-                  configuredSecrets.includes("tmdb.apiKey")
-                    ? "已保存；输入新值可替换"
-                    : "输入 TMDB API Key"
-                }
-                description="服务端加密保存；留空保留现有密钥。"
+                multiline={false}
+                disabled={loading || savingBasic}
+                placeholder="输入新凭证；留空保留现有值"
+                description="默认显示前后各 4 位，点击显示全文可展开。"
               />
             </section>
 
@@ -572,18 +602,20 @@ export function SettingsPage() {
                   onChange={(value) => update("emby.url", value)}
                   description="填写服务器根地址，包含协议和端口。"
                 />
-                <SettingInput
+                <SecretSetting
                   id="emby-api-key"
                   label="API Key"
-                  type="password"
-                  placeholder={
-                    configuredSecrets.includes("emby.apiKey")
-                      ? "已保存；输入新值可替换"
-                      : "输入 Emby API Key"
-                  }
+                  section="emby"
+                  secretKey="emby.apiKey"
+                  key={`emby.apiKey:${secretRevisions["emby"] ?? 0}`}
+                  configured={configuredSecrets.includes("emby.apiKey")}
+                  masked={maskedSecrets["emby.apiKey"]}
                   value={stringValue("emby.apiKey")}
                   onChange={(value) => update("emby.apiKey", value)}
-                  description="在 Emby 控制台的 API 密钥页面创建。保存后由服务端加密保管；留空不会覆盖已保存的密钥。"
+                  multiline={false}
+                  disabled={loading || savingBasic}
+                  placeholder="输入新凭证；留空保留现有值"
+                  description="默认显示前后各 4 位，点击显示全文可展开。"
                 />
                 <SettingInput
                   id="emby-cache-expiration-hours"
@@ -609,17 +641,20 @@ export function SettingsPage() {
                 </p>
               </div>
               <FieldGroup className="gap-4">
-                <SettingTextarea
+                <SecretSetting
                   id="115-cookie"
                   label="115 Cookie"
-                  placeholder={
-                    configuredSecrets.includes("115.cookie")
-                      ? "已保存；粘贴新 Cookie 可替换"
-                      : "粘贴 115 登录 Cookie"
-                  }
+                  section="115"
+                  secretKey="115.cookie"
+                  key={`115.cookie:${secretRevisions["115"] ?? 0}`}
+                  configured={configuredSecrets.includes("115.cookie")}
+                  masked={maskedSecrets["115.cookie"]}
                   value={stringValue("115.cookie")}
                   onChange={(value) => update("115.cookie", value)}
-                  description="Cookie 等同登录凭证；由服务端加密保管，留空不会覆盖已保存值。"
+                  multiline={true}
+                  disabled={loading || savingBasic}
+                  placeholder="输入新凭证；留空保留现有值"
+                  description="默认显示前后各 4 位，点击显示全文可展开。"
                 />
                 <SettingInput
                   id="115-download-directory"
@@ -1167,18 +1202,20 @@ export function SettingsPage() {
                 update("notifications.telegramEnabled", value)
               }
             />
-            <SettingInput
+            <SecretSetting
               id="notifications-bot-token"
               label="Bot Token"
-              type="password"
-              placeholder={
-                configuredSecrets.includes("notifications.botToken")
-                  ? "已保存；输入新 Token 可替换"
-                  : "从 BotFather 获取"
-              }
+              section="notifications"
+              secretKey="notifications.botToken"
+              key={`notifications.botToken:${secretRevisions["notifications"] ?? 0}`}
+              configured={configuredSecrets.includes("notifications.botToken")}
+              masked={maskedSecrets["notifications.botToken"]}
               value={stringValue("notifications.botToken")}
               onChange={(value) => update("notifications.botToken", value)}
-              description="由服务端加密保管并调用 Telegram Bot API；留空不会覆盖已保存值。"
+              multiline={false}
+              disabled={loading || savingBasic}
+              placeholder="输入新凭证；留空保留现有值"
+              description="默认显示前后各 4 位，点击显示全文可展开。"
             />
             <SettingInput
               id="notifications-chat-id"

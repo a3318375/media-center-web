@@ -5,9 +5,10 @@ export type SettingValue = string | boolean | number | string[]
 export type SettingsSection =
   "tmdb" | "emby" | "115" | "organize" | "search" | "pansou" | "notifications"
 
-type SettingsResponse = {
+export type SettingsResponse = {
   values: Record<string, SettingValue>
   configuredSecrets: string[]
+  maskedSecrets?: Record<string, string>
 }
 
 async function request(
@@ -34,6 +35,31 @@ async function request(
 }
 
 export const settingsApi = {
+  async reveal(
+    section: SettingsSection,
+    key: string,
+    signal?: AbortSignal
+  ): Promise<{ value: string }> {
+    const token = getAccessToken()
+    const response = await fetch(
+      `/api/settings/${encodeURIComponent(section)}/secrets/reveal`,
+      {
+        method: "POST",
+        signal,
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ key }),
+      }
+    )
+    if (!response.ok) {
+      const result = await response.json().catch(() => null)
+      throw new Error(result?.message ?? "读取凭证失败")
+    }
+    return response.json() as Promise<{ value: string }>
+  },
   get(section: SettingsSection) {
     return request(section, "GET")
   },

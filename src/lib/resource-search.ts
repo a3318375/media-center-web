@@ -67,6 +67,28 @@ export function readMediaSearchHistory(
   )
 }
 
+function isSearchHistoryEntry(value: unknown): value is SearchHistoryEntry {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  const item = value as Record<string, unknown>
+  if (
+    typeof item.keyword !== "string" ||
+    !item.keyword.trim() ||
+    typeof item.source !== "string" ||
+    typeof item.at !== "number" ||
+    !Number.isFinite(item.at)
+  )
+    return false
+  if (item.kind === "media") return true
+  if (item.kind !== undefined && item.kind !== "resource") return false
+  return (
+    typeof item.mode === "string" &&
+    [item.cloudTypes, item.plugins, item.channels].every(
+      (list) =>
+        Array.isArray(list) && list.every((entry) => typeof entry === "string")
+    )
+  )
+}
+
 function readAllSearchHistory(
   storage: Pick<Storage, "getItem">
 ): SearchHistoryEntry[] {
@@ -74,7 +96,7 @@ function readAllSearchHistory(
     const parsed: unknown = JSON.parse(
       storage.getItem(RESOURCE_SEARCH_HISTORY_KEY) ?? "[]"
     )
-    return Array.isArray(parsed) ? (parsed as SearchHistoryEntry[]) : []
+    return Array.isArray(parsed) ? parsed.filter(isSearchHistoryEntry) : []
   } catch {
     return []
   }

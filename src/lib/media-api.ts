@@ -8,7 +8,7 @@ import type {
   MediaSource,
   MediaProvidersResponse,
 } from "@/lib/media-contract"
-import type { AnimeSubscription } from "@/mocks/data/anime-subscriptions"
+import type { AnimeSubscription } from "@/lib/anime-api"
 import type {
   EmbyMediaItem,
   EmbyResumeItem,

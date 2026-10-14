@@ -1,21 +1,5 @@
-export type AnimeSubscriptionStatus = "更新中" | "已暂停" | "已完结"
-
-export type AnimeSubscription = {
-  id: string
-  title: string
-  originalTitle: string
-  status: AnimeSubscriptionStatus
-  currentEpisode: number
-  totalEpisodes?: number
-  nextUpdate: string
-  nextEpisode: string
-  rating: string
-  genres: string[]
-  description: string
-  palette: string
-  artwork: string
-  recentEpisodes: { episode: string; title: string; updatedAt: string }[]
-}
+import type { AnimeSubscription } from "@/lib/anime-api"
+export type { AnimeSubscription, AnimeSubscriptionStatus } from "@/lib/anime-api"
 
 export const animeSubscriptions: AnimeSubscription[] = [
   {

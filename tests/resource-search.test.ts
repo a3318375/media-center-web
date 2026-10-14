@@ -6,6 +6,7 @@ import {
   normalizeResourceChannel,
   safeResourceURL,
   readResourceSearchHistory,
+  readMediaSearchHistory,
   RESOURCE_SEARCH_HISTORY_KEY,
   saveResourceSearchHistory,
 } from "../src/lib/resource-search.ts"
@@ -18,6 +19,45 @@ function memoryStorage() {
     removeItem: (key: string) => values.delete(key),
   }
 }
+
+test("历史记录过滤合法 JSON 中的坏条目，保留旧格式资源与媒体历史", () => {
+  const storage = memoryStorage()
+  const resource = {
+    keyword: "作品",
+    source: "all",
+    mode: "merge",
+    cloudTypes: [],
+    plugins: [],
+    channels: [],
+    at: 1,
+  }
+  const media = { kind: "media", keyword: "动漫", source: "bangumi", at: 2 }
+  storage.setItem(
+    RESOURCE_SEARCH_HISTORY_KEY,
+    JSON.stringify([
+      null,
+      3,
+      "bad",
+      [],
+      {},
+      { ...resource, keyword: " " },
+      { ...resource, at: "1" },
+      { ...resource, channels: [null] },
+      { ...resource, plugins: null },
+      { ...resource, kind: "unknown" },
+      resource,
+      media,
+    ])
+  )
+  assert.deepEqual(readResourceSearchHistory(storage), [resource])
+  assert.deepEqual(readMediaSearchHistory(storage), [media])
+  assert.equal(
+    saveResourceSearchHistory(storage, { ...resource, keyword: "新作品" })
+      .length,
+    2
+  )
+  assert.deepEqual(readMediaSearchHistory(storage), [media])
+})
 
 test("首轮与后续轮次按 PanSou 规则选择来源", () => {
   assert.equal(chooseSearchSource(["tg"], ["plugin"], true), "tg")

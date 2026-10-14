@@ -12,6 +12,16 @@ let demoToken = "frame-demo-access-token"
 let demoAPIKeys: Array<{ id: string; name: string; prefix: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; key: string }> = []
 const demoSettings: Record<string, Record<string, unknown>> = {}
 const configuredSecrets = new Set<string>()
+const demoSecretValues: Record<string,string> = {}
+function publicDemoSettings(section: string) {
+ const keys=[...configuredSecrets].filter(key => key.startsWith(`${section}.`))
+ const maskedSecrets=Object.fromEntries(keys.map(key => {
+  const chars=Array.from(demoSecretValues[key]??"")
+  const mask=chars.length<=2 ? "••••••••" : chars.length<=8 ? chars[0]+"••••••••"+chars.at(-1) : chars.slice(0,4).join("")+"••••••••"+chars.slice(-4).join("")
+  return [key,mask]
+ }))
+ return {values:demoSettings[section]??{},configuredSecrets:keys,maskedSecrets}
+}
 const useBackendAuth = import.meta.env.VITE_BACKEND_AUTH === "true"
 const animeSubscriptions = structuredClone(initialAnimeSubscriptions)
 
@@ -32,6 +42,14 @@ function hasDemoToken(request: Request) {
 }
 
 export const handlers = [
+  http.post("/api/settings/:section/secrets/reveal", async ({params,request}) => {
+    if(useBackendAuth || params.section === "tmdb") return passthrough()
+    if(!hasDemoToken(request)) return HttpResponse.json({message:"请先登录"},{status:401})
+    const body=await request.json() as {key?:string}
+    if(typeof body.key!=="string" || !body.key.startsWith(`${params.section}.`) || !["emby.apiKey","115.cookie","notifications.botToken","notifications.webhookSecret"].includes(body.key)) return HttpResponse.json({message:"凭证字段无效"},{status:400})
+    if(!configuredSecrets.has(body.key)) return HttpResponse.json({message:"该凭证尚未保存"},{status:404})
+    return HttpResponse.json({value:demoSecretValues[body.key]},{headers:{"Cache-Control":"no-store"}})
+  }),
   http.get("/api/logs", ({ request }) => {
     if (useBackendAuth) return passthrough()
     const url = new URL(request.url)
@@ -51,7 +69,7 @@ export const handlers = [
     return HttpResponse.json(animeSubscriptions[index])
   }),
   http.get("/api/emby/dashboard", () => useBackendAuth ? passthrough() : HttpResponse.json({ updatedAt: new Date().toISOString(), warnings: [], sites: embySites, stats: embyStats, libraries: embyLibraries, recentlyAdded, continueWatching })),
-  http.get("/api/settings/:section", ({ params }) => useBackendAuth || params.section === "tmdb" ? passthrough() : HttpResponse.json({ values: demoSettings[params.section as string] ?? {}, configuredSecrets: [...configuredSecrets].filter((key) => key.startsWith(`${params.section}.`)) })),
+  http.get("/api/settings/:section", ({ params }) => useBackendAuth || params.section === "tmdb" ? passthrough() : HttpResponse.json(publicDemoSettings(params.section as string))),
   http.put("/api/settings/:section", async ({ params, request }) => {
     if (useBackendAuth || params.section === "tmdb") return passthrough()
     const section = params.section as string
@@ -59,11 +77,11 @@ export const handlers = [
     const values = demoSettings[section] ?? (demoSettings[section] = {})
     for (const [key, value] of Object.entries(body.values ?? {})) {
       if (["emby.apiKey", "115.cookie", "notifications.botToken"].includes(key)) {
-        if (typeof value === "string" && value) { configuredSecrets.add(key); values[key] = "" }
+        if (typeof value === "string" && value) { configuredSecrets.add(key); demoSecretValues[key]=value; values[key] = "" }
       } else values[key] = value
     }
-    for (const key of body.clearSecrets ?? []) { configuredSecrets.delete(key); delete values[key] }
-    return HttpResponse.json({ values, configuredSecrets: [...configuredSecrets].filter((key) => key.startsWith(`${section}.`)) })
+    for (const key of body.clearSecrets ?? []) { configuredSecrets.delete(key); delete demoSecretValues[key]; delete values[key] }
+    return HttpResponse.json(publicDemoSettings(section))
   }),
   http.get("/api/auth/api-keys", () => useBackendAuth ? passthrough() : HttpResponse.json({ items: demoAPIKeys.map(publicDemoAPIKey) })),
   http.post("/api/auth/api-keys", async ({ request }) => {
