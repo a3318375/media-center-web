@@ -7,10 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { getAccessToken } from "@/lib/auth-api"
-import {
-  ResourceDownloadDialog,
-  type DownloadSource,
-} from "@/components/resource-download-dialog"
+import type { DownloadSource } from "@/components/resource-download-dialog"
 import {
   downloadApi,
   is115ShareURL,
@@ -217,21 +214,17 @@ export function ResourceSearchPage({
     [tab, setTab] = useState(savedSearch?.tab ?? ""),
     [copyMessage, setCopyMessage] = useState("")
   const [linkHealth, setLinkHealth] = useState<Record<string, LinkHealth>>({})
-  const [downloadSource, setDownloadSource] = useState<DownloadSource | null>(
-    null
-  )
   const [downloading, setDownloading] = useState("")
   async function downloadResource(source: DownloadSource) {
-    if (is115ShareURL(source.url)) {
-      setDownloadSource(source)
-      return
-    }
     if (downloading) return
     setDownloading(source.url)
     setError("")
     try {
       await downloadApi.create({
-        kind: "offline",
+        kind: is115ShareURL(source.url) ? "share_transfer" : "offline",
+        ...(is115ShareURL(source.url)
+          ? { wholeShare: true, receiveCode: source.password ?? "" }
+          : {}),
         url: source.url,
         directoryId: "",
         reference: {
@@ -583,16 +576,6 @@ export function ResourceSearchPage({
   }
   return (
     <main className="flex flex-1 flex-col gap-4 p-4 sm:p-6 lg:p-8">
-      {downloadSource && (
-        <ResourceDownloadDialog
-          key={downloadSource.url}
-          source={downloadSource}
-          onClose={() => setDownloadSource(null)}
-          onCreated={() =>
-            setCopyMessage("已加入下载队列，将使用设置中的目录下载并整理。")
-          }
-        />
-      )}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">

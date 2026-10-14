@@ -47,6 +47,7 @@ export type DownloadTask = {
   artifacts: DownloadFile[]
 }
 export type DownloadRequest = {
+  wholeShare?: boolean
   kind: "offline" | "share_transfer"
   url: string
   directoryId: string
