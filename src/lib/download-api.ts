@@ -93,6 +93,13 @@ async function request<T>(
   return result as T
 }
 export const downloadApi = {
+  directories: (parentId: string, signal?: AbortSignal) =>
+    request<{ items: DownloadFile[] }>(
+      `115/directories?parentId=${encodeURIComponent(parentId)}`,
+      "GET",
+      undefined,
+      signal
+    ),
   shareFiles: (
     url: string,
     receiveCode: string,

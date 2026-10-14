@@ -31,6 +31,7 @@ import {
 } from "@/lib/settings-api"
 import { SecretSetting } from "@/components/secret-setting"
 import { APIKeysPanel } from "@/components/api-keys-panel"
+import { MediaLibrarySettings } from "@/components/media-library-settings"
 import { getAccessToken } from "@/lib/auth-api"
 import {
   normalizeResourceChannel,
@@ -996,21 +997,7 @@ export function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="organize" className="pt-5">
-          <FieldGroup className="gap-4">
-            <FieldDescription>
-              在“影视整理”中配置 115
-              未整理目录、分类目标目录和每天运行时间。规则默认关闭，可先预览；历史文件需确认下载完成。旧版路径设置仍保留在数据库中。
-            </FieldDescription>
-            <Button
-              className="self-start"
-              onClick={() => {
-                window.history.pushState(null, "", "/tools/organize")
-                window.dispatchEvent(new PopStateEvent("popstate"))
-              }}
-            >
-              打开影视整理
-            </Button>
-          </FieldGroup>
+          <MediaLibrarySettings />
         </TabsContent>
 
         <TabsContent value="search" className="pt-5">

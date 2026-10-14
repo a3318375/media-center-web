@@ -5,8 +5,6 @@ import { DiscoverExplorePage } from "@/components/discover-explore-page"
 import { RankingsPage } from "@/components/rankings-page"
 import { AnimeSubscriptionsPage } from "@/components/anime-subscriptions-page"
 import { LogsPage } from "@/components/logs-page"
-import { DownloadsPage } from "@/components/downloads-page"
-import { OrganizePage } from "@/components/organize-page"
 import { MediaDetailPage } from "@/components/media-detail-page"
 import {
   MediaDetailContext,
@@ -199,9 +197,9 @@ export function App() {
         ) : activePath === "/tools/logs" ? (
           <LogsPage />
         ) : activePath === "/tools/downloads" ? (
-          <DownloadsPage />
+          <SettingsPage />
         ) : activePath === "/tools/organize" ? (
-          <OrganizePage />
+          <SettingsPage />
         ) : activePath === "/settings" ? (
           <SettingsPage />
         ) : activePath === "/search" ? null : (

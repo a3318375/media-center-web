@@ -11,7 +11,11 @@ import {
   ResourceDownloadDialog,
   type DownloadSource,
 } from "@/components/resource-download-dialog"
-import { is115ShareURL, type DownloadMediaContext } from "@/lib/download-api"
+import {
+  downloadApi,
+  is115ShareURL,
+  type DownloadMediaContext,
+} from "@/lib/download-api"
 import {
   resourceSearchPlan,
   safeResourceURL,
@@ -216,6 +220,39 @@ export function ResourceSearchPage({
   const [downloadSource, setDownloadSource] = useState<DownloadSource | null>(
     null
   )
+  const [downloading, setDownloading] = useState("")
+  async function downloadResource(source: DownloadSource) {
+    if (is115ShareURL(source.url)) {
+      setDownloadSource(source)
+      return
+    }
+    if (downloading) return
+    setDownloading(source.url)
+    setError("")
+    try {
+      await downloadApi.create({
+        kind: "offline",
+        url: source.url,
+        directoryId: "",
+        reference: {
+          source: "media_search",
+          sourceId: source.media?.providerId
+            ? `${source.media.provider}:${source.media.type}:${source.media.providerId}`
+            : undefined,
+          media: {
+            ...source.media,
+            type: source.media?.type ?? "movie",
+            title: source.media?.title ?? source.title,
+          },
+        },
+      })
+      setCopyMessage("已加入下载队列，完成后按设置自动整理。")
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "下载提交失败")
+    } finally {
+      setDownloading("")
+    }
+  }
   const mediaContext = useRef<{
     keyword: string
     media?: DownloadMediaContext
@@ -552,7 +589,7 @@ export function ResourceSearchPage({
           source={downloadSource}
           onClose={() => setDownloadSource(null)}
           onCreated={() =>
-            setCopyMessage("已加入下载队列，可在下载任务中查看。")
+            setCopyMessage("已加入下载队列，将使用设置中的目录下载并整理。")
           }
         />
       )}
@@ -706,8 +743,9 @@ export function ResourceSearchPage({
                             is115ShareURL(link.url)) && (
                             <Button
                               size="sm"
+                              disabled={!!downloading}
                               onClick={() =>
-                                setDownloadSource({
+                                void downloadResource({
                                   url: link.url,
                                   password: link.password,
                                   title:

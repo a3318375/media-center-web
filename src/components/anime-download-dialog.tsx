@@ -25,11 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  downloadApi,
-  directoryIdFromInput,
-  type AnimeDownloadCandidate,
-} from "@/lib/download-api"
+import { downloadApi, type AnimeDownloadCandidate } from "@/lib/download-api"
 import type { AnimeSubscription } from "@/lib/anime-api"
 
 export function AnimeDownloadDialog({
@@ -40,7 +36,6 @@ export function AnimeDownloadDialog({
   onClose: () => void
 }) {
   const [enabled, setEnabled] = useState(false)
-  const [directory, setDirectory] = useState("")
   const [fromEpisode, setFromEpisode] = useState(1)
   const [items, setItems] = useState<AnimeDownloadCandidate[]>([])
   const [loading, setLoading] = useState(true)
@@ -54,7 +49,6 @@ export function AnimeDownloadDialog({
       .then((result) => {
         if (!controller.signal.aborted) {
           setEnabled(result.rule.enabled)
-          setDirectory(result.rule.directoryId)
           setFromEpisode(result.rule.fromEpisode)
           setItems(result.items)
         }
@@ -94,7 +88,7 @@ export function AnimeDownloadDialog({
     try {
       await downloadApi.saveAnime(anime.id, {
         enabled,
-        directoryId: directoryIdFromInput(directory),
+        directoryId: "library",
         fromEpisode,
       })
       onClose()
@@ -132,10 +126,9 @@ export function AnimeDownloadDialog({
     >
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>《{anime.title}》下载设置</DialogTitle>
+          <DialogTitle>《{anime.title}》下载记录与范围</DialogTitle>
           <DialogDescription>
-            选择历史下载范围和 115
-            目标目录。启用后，规则匹配的新资源也会自动加入公共下载队列。
+            新订阅默认自动下载。此处可查看资源记录、调整起始集数或停止下载；目录统一使用设置中的“动漫”文件夹。
           </DialogDescription>
         </DialogHeader>
         <form
@@ -159,19 +152,9 @@ export function AnimeDownloadDialog({
                 disabled={loading || busy}
               />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="anime-download-directory">
-                115 目标文件夹
-              </FieldLabel>
-              <Input
-                id="anime-download-directory"
-                value={directory}
-                onChange={(event) => setDirectory(event.target.value)}
-                placeholder="粘贴 115 文件夹链接（包含 cid），或文件夹 ID"
-                required
-                disabled={loading || busy}
-              />
-            </Field>
+            <FieldDescription>
+              使用设置中的统一下载目录，不需要为每部番剧单独填写目录。
+            </FieldDescription>
             <Field>
               <FieldLabel htmlFor="anime-download-from">
                 从第几集开始
@@ -265,7 +248,6 @@ export function AnimeDownloadDialog({
               disabled={
                 loading ||
                 busy ||
-                !directory ||
                 !Number.isInteger(fromEpisode) ||
                 fromEpisode < 1
               }

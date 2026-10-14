@@ -1,8 +1,6 @@
 import {
   CalendarDaysIcon,
-  ClapperboardIcon,
   CompassIcon,
-  DownloadIcon,
   LayoutDashboardIcon,
   SearchIcon,
   ScrollTextIcon,
@@ -37,8 +35,6 @@ export const navigationSections: NavigationSection[] = [
       { title: "榜单推荐", path: "/discover/rankings", icon: TrophyIcon },
       { title: "动漫订阅", path: "/discover/anime", icon: TvMinimalPlayIcon },
       { title: "追剧日历", path: "/discover/calendar", icon: CalendarDaysIcon },
-      { title: "下载任务", path: "/tools/downloads", icon: DownloadIcon },
-      { title: "影视整理", path: "/tools/organize", icon: ClapperboardIcon },
       { title: "日志中心", path: "/tools/logs", icon: ScrollTextIcon },
     ],
   },

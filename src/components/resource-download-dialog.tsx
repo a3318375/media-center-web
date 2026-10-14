@@ -28,7 +28,6 @@ import {
 } from "@/components/ui/table"
 import {
   downloadApi,
-  directoryIdFromInput,
   is115ShareURL,
   type DownloadFile,
   type DownloadMediaContext,
@@ -45,7 +44,6 @@ export function ResourceDownloadDialog({
   media,
   onClose,
   onCreated,
-  initialDirectory = "",
 }: {
   source: DownloadSource
   media?: DownloadMediaContext
@@ -54,7 +52,6 @@ export function ResourceDownloadDialog({
   initialDirectory?: string
 }) {
   const sharing = is115ShareURL(source.url)
-  const [directory, setDirectory] = useState(initialDirectory)
   const [password, setPassword] = useState(source.password ?? "")
   const [files, setFiles] = useState<DownloadFile[]>([])
   const [selected, setSelected] = useState<string[]>([])
@@ -101,13 +98,17 @@ export function ResourceDownloadDialog({
       await downloadApi.create({
         kind: sharing ? "share_transfer" : "offline",
         url: source.url,
-        directoryId: directoryIdFromInput(directory),
+        directoryId: "",
         reference: {
           source: "media_search",
           sourceId: context?.providerId
             ? `${context.provider}:${context.type ?? "unknown"}:${context.providerId}`
             : undefined,
-          media: context ?? { title: source.title },
+          media: {
+            ...context,
+            type: context?.type ?? "movie",
+            title: context?.title ?? source.title,
+          },
         },
         ...(sharing
           ? {
@@ -138,7 +139,7 @@ export function ResourceDownloadDialog({
             {sharing ? "转存 115 分享" : "提交 115 离线下载"}
           </DialogTitle>
           <DialogDescription>
-            {source.title}。任务及产物可在“下载任务”中查看。
+            {source.title}。自动使用设置中的未整理目录，下载完成后统一归档。
           </DialogDescription>
         </DialogHeader>
         <form
@@ -151,24 +152,9 @@ export function ResourceDownloadDialog({
             </Alert>
           )}
           <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="resource-download-target">
-                115 目标文件夹
-              </FieldLabel>
-              <Input
-                id="resource-download-target"
-                value={directory}
-                onChange={(event) => setDirectory(event.target.value)}
-                placeholder="粘贴包含 cid 的文件夹链接，或文件夹 ID"
-                required
-                disabled={busy}
-              />
-              <FieldDescription>
-                {sharing
-                  ? "分享先转存到目标内的独立任务目录，确认文件后供公共整理使用。"
-                  : "下载保留原始文件名；后续由公共整理归档。"}
-              </FieldDescription>
-            </Field>
+            <FieldDescription>
+              目标目录由设置统一管理；分享转存后会确认文件，再进入整理。
+            </FieldDescription>
             {sharing && (
               <Field>
                 <FieldLabel htmlFor="share-receive-code">提取码</FieldLabel>
@@ -298,9 +284,7 @@ export function ResourceDownloadDialog({
             </Button>
             <Button
               type="submit"
-              disabled={
-                busy || !directory.trim() || (sharing && !selected.length)
-              }
+              disabled={busy || (sharing && !selected.length)}
             >
               {busy ? "处理中…" : sharing ? "确认选择并转存" : "加入下载队列"}
             </Button>

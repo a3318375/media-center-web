@@ -58,6 +58,29 @@ async function request<T>(
   return result as T
 }
 export const organizeApi = {
+  config: (signal?: AbortSignal) =>
+    request<{
+      id?: string
+      sourceId: string
+      targetId: string
+      cron: string
+      enabled: boolean
+      scheduleError?: string
+    }>("config", "GET", undefined, signal),
+  saveConfig: (config: {
+    sourceId: string
+    targetId: string
+    cron: string
+    enabled: boolean
+  }) =>
+    request<{
+      id: string
+      sourceId: string
+      targetId: string
+      cron: string
+      enabled: boolean
+      scheduleError?: string
+    }>("config", "PUT", config),
   rules: (signal?: AbortSignal) =>
     request<OrganizeRule[]>("rules", "GET", undefined, signal),
   plans: (signal?: AbortSignal) =>

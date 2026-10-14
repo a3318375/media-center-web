@@ -154,8 +154,8 @@ function AnimeCard({
               size="icon-sm"
               disabled={!anime.saved}
               onClick={() => onDownloads(anime)}
-              aria-label={`设置《${anime.title}》下载`}
-              title="设置下载范围和目标目录"
+              aria-label={`查看《${anime.title}》下载记录`}
+              title="下载记录与范围"
             >
               <DownloadIcon data-icon="inline-start" />
             </Button>

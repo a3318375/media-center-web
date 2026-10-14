@@ -171,7 +171,7 @@ export function AddAnimeSubscription({
           <DialogTitle>添加动漫订阅</DialogTitle>
           <DialogDescription>
             选择单番剧
-            RSS，确认作品和规则后保存。保存后可单独启用下载范围，文件由公共整理规则归档。
+            RSS，确认作品和规则后保存。添加后立即刷新并自动下载已有匹配资源，后续按定时刷新；目录使用全局设置。
           </DialogDescription>
         </DialogHeader>
         {error && (

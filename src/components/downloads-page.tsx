@@ -55,7 +55,11 @@ function reasonMessage(reason: unknown) {
   return reason instanceof Error ? reason.message : "下载请求失败"
 }
 
-export function DownloadsPage() {
+export function DownloadsPage({
+  recordsOnly = false,
+}: {
+  recordsOnly?: boolean
+}) {
   const [tasks, setTasks] = useState<DownloadTask[]>([])
   const [magnet, setMagnet] = useState("")
   const [directory, setDirectory] = useState("")
@@ -199,72 +203,74 @@ export function DownloadsPage() {
           <AlertDescription>{notice}</AlertDescription>
         </Alert>
       )}
-      <Card>
-        <CardHeader>
-          <CardTitle>添加 115 下载或转存</CardTitle>
-          <CardDescription>
-            先在全局设置中保存 115 Cookie，再选择下载目标文件夹。
-          </CardDescription>
-        </CardHeader>
-        <form onSubmit={(event) => void submit(event)}>
-          <CardContent>
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="download-magnet">
-                  磁力或 115 分享链接
-                </FieldLabel>
-                <Input
-                  id="download-magnet"
-                  value={magnet}
-                  onChange={(event) => setMagnet(event.target.value)}
-                  required
-                  placeholder="magnet:?xt=urn:btih:…"
-                  disabled={Boolean(busy)}
-                />
-                <FieldDescription>
-                  支持 BT v1 磁力；115 分享会先打开文件选择窗口。
-                </FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="download-directory">
-                  115 目标文件夹
-                </FieldLabel>
-                <Input
-                  id="download-directory"
-                  value={directory}
-                  onChange={(event) => setDirectory(event.target.value)}
-                  required
-                  placeholder="粘贴 115 文件夹链接，或文件夹 ID"
-                  disabled={Boolean(busy)}
-                />
-                <FieldDescription>
-                  打开 115 中的目标文件夹，复制包含 cid
-                  的地址。文件先保留原名，公共整理后续接入。
-                </FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="download-title">名称（可选）</FieldLabel>
-                <Input
-                  id="download-title"
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  maxLength={200}
-                  disabled={Boolean(busy)}
-                />
-              </Field>
-            </FieldGroup>
-          </CardContent>
-          <CardFooter className="pt-4">
-            <Button
-              type="submit"
-              disabled={Boolean(busy) || !magnet.trim() || !directory.trim()}
-            >
-              <DownloadIcon data-icon="inline-start" />
-              {busy === "submit" ? "正在提交…" : "加入下载队列"}
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
+      {!recordsOnly && (
+        <Card>
+          <CardHeader>
+            <CardTitle>添加 115 下载或转存</CardTitle>
+            <CardDescription>
+              先在全局设置中保存 115 Cookie，再选择下载目标文件夹。
+            </CardDescription>
+          </CardHeader>
+          <form onSubmit={(event) => void submit(event)}>
+            <CardContent>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="download-magnet">
+                    磁力或 115 分享链接
+                  </FieldLabel>
+                  <Input
+                    id="download-magnet"
+                    value={magnet}
+                    onChange={(event) => setMagnet(event.target.value)}
+                    required
+                    placeholder="magnet:?xt=urn:btih:…"
+                    disabled={Boolean(busy)}
+                  />
+                  <FieldDescription>
+                    支持 BT v1 磁力；115 分享会先打开文件选择窗口。
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="download-directory">
+                    115 目标文件夹
+                  </FieldLabel>
+                  <Input
+                    id="download-directory"
+                    value={directory}
+                    onChange={(event) => setDirectory(event.target.value)}
+                    required
+                    placeholder="粘贴 115 文件夹链接，或文件夹 ID"
+                    disabled={Boolean(busy)}
+                  />
+                  <FieldDescription>
+                    打开 115 中的目标文件夹，复制包含 cid
+                    的地址。文件先保留原名，公共整理后续接入。
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="download-title">名称（可选）</FieldLabel>
+                  <Input
+                    id="download-title"
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    maxLength={200}
+                    disabled={Boolean(busy)}
+                  />
+                </Field>
+              </FieldGroup>
+            </CardContent>
+            <CardFooter className="pt-4">
+              <Button
+                type="submit"
+                disabled={Boolean(busy) || !magnet.trim() || !directory.trim()}
+              >
+                <DownloadIcon data-icon="inline-start" />
+                {busy === "submit" ? "正在提交…" : "加入下载队列"}
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>下载任务</CardTitle>
